@@ -53,6 +53,15 @@ class Graph {
         return true;
     }
 
+    hasEdge(from, to) {
+        return this.edges.some(e => {
+            if (this.directed) {
+                return e.from === from && e.to === to;
+            }
+            return (e.from === from && e.to === to) || (e.from === to && e.to === from);
+        });
+    }
+
     removeEdge(from, to) {
         const idx = this.edges.findIndex(e => {
             if (this.directed) {
@@ -97,6 +106,21 @@ class Graph {
         }
         
         return adj;
+    }
+
+    getNeighbors(nodeId) {
+        if (!this.nodes.has(nodeId)) return [];
+
+        const neighbors = [];
+        for (const edge of this.edges) {
+            if (edge.from === nodeId) {
+                neighbors.push(edge.to);
+            } else if (!this.directed && edge.to === nodeId) {
+                neighbors.push(edge.from);
+            }
+        }
+
+        return neighbors;
     }
 
     clear() {

@@ -41,10 +41,48 @@ class GraphVisualizer {
     init() {
         this.resizeCanvas();
         window.addEventListener('resize', () => this.resizeCanvas());
+        this.setupThemeToggle();
         this.setupCanvasEvents();
         this.setupUIEvents();
         this.setupViewToggle();
         this.animate();
+    }
+
+    setupThemeToggle() {
+        this.themeToggleBtn = document.getElementById('themeToggleBtn');
+        if (!this.themeToggleBtn) return;
+
+        const savedTheme = localStorage.getItem('graph-theme');
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+
+        this.applyTheme(initialTheme, false);
+
+        this.themeToggleBtn.onclick = () => {
+            const isDark = document.body.classList.contains('dark-mode');
+            this.applyTheme(isDark ? 'light' : 'dark');
+        };
+    }
+
+    applyTheme(theme, persist = true) {
+        const isDark = theme === 'dark';
+        document.body.classList.toggle('dark-mode', isDark);
+
+        if (this.themeToggleBtn) {
+            const text = this.themeToggleBtn.querySelector('.theme-text');
+            if (text) {
+                text.textContent = isDark ? 'Light Mode' : 'Dark Mode';
+            }
+
+            const nextModeLabel = isDark ? 'light mode' : 'dark mode';
+            this.themeToggleBtn.setAttribute('aria-label', `Aktifkan ${nextModeLabel}`);
+            this.themeToggleBtn.setAttribute('title', `Aktifkan ${nextModeLabel}`);
+            this.themeToggleBtn.classList.toggle('is-dark', isDark);
+        }
+
+        if (persist) {
+            localStorage.setItem('graph-theme', theme);
+        }
     }
 
     // ==================== VIEW TOGGLE ====================
@@ -384,7 +422,10 @@ class GraphVisualizer {
                 tools.forEach(t => document.getElementById(t).classList.remove('active'));
                 document.getElementById(id).classList.add('active');
                 document.getElementById('currentMode').textContent = toolNames[i];
-                document.getElementById('instructions').textContent = toolInstr[i];
+                const instructions = document.getElementById('instructions');
+                if (instructions) {
+                    instructions.textContent = toolInstr[i];
+                }
                 
                 // Switch to 2D for editing
                 if (this.viewMode === '3d') {

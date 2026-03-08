@@ -307,9 +307,13 @@
 
 .size-controls {
     display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 14px;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
     margin-bottom: 14px;
+}
+
+.size-input {
+    min-width: 0;
 }
 
 .size-input label {
@@ -344,24 +348,26 @@
     overflow: hidden;
     border: 2px solid #E0EEF2;
     box-shadow: 0 2px 10px rgba(0,100,140,0.08);
-    height: 44px; /* Fixed height */
+    height: 44px;
+    width: 100%;
+    min-width: 0;
 }
 
 .num-control input {
-    width: 50px; /* Fixed width */
-    min-width: 50px;
-    max-width: 50px;
-    flex: 0 0 50px;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    flex: 1 1 auto;
     border: none;
     background: white;
     text-align: center;
     font-weight: 700;
     color: #2E7D8A;
-    padding: 0 4px;
-    font-size: 1rem;
+    padding: 0 2px;
+    font-size: 0.95rem;
     -moz-appearance: textfield;
     height: 100%;
-    line-height: 40px;
+    line-height: normal;
 }
 
 .num-control input::-webkit-outer-spin-button,
@@ -376,14 +382,14 @@
 }
 
 .num-btn {
-    width: 40px;
-    min-width: 40px;
-    flex: 0 0 40px;
+    width: 32px;
+    min-width: 32px;
+    flex: 0 0 32px;
     padding: 0;
     border: none;
     background: #F0F7FA;
     cursor: pointer;
-    font-size: 1.2rem;
+    font-size: 1rem;
     font-weight: 700;
     color: #5A7A8D;
     transition: all 0.2s;
@@ -2160,4 +2166,133 @@
     .view-toggle-island {
         justify-content: center;
     }
+
+    .size-controls {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ==================== ISLAND DARK MODE ==================== */
+body.dark-mode .islands-app {
+    background: linear-gradient(135deg, #0f172a 0%, #111827 50%, #1f2937 100%);
+}
+
+body.dark-mode .islands-sidebar {
+    background: rgba(15, 23, 42, 0.72);
+    border-right: 1px solid rgba(148, 163, 184, 0.22);
+}
+
+body.dark-mode .grid-header h2,
+body.dark-mode .panel h3 {
+    color: var(--text-primary);
+}
+
+body.dark-mode .grid-size {
+    background: #1f2937;
+    color: var(--accent);
+    box-shadow: 0 4px 18px rgba(0, 0, 0, 0.3);
+}
+
+body.dark-mode .ocean-bg,
+body.dark-mode .grid-ocean {
+    background: linear-gradient(180deg, #1e3a5f 0%, #1b4d75 55%, #153e63 100%);
+    box-shadow:
+        0 18px 50px rgba(0, 0, 0, 0.35),
+        inset 0 -10px 28px rgba(0, 0, 0, 0.25);
+}
+
+body.dark-mode .grid-container {
+    background: rgba(15, 23, 42, 0.42);
+}
+
+body.dark-mode .size-input label,
+body.dark-mode .size-limit-hint,
+body.dark-mode .hint,
+body.dark-mode .speed-control-island label,
+body.dark-mode .toggle-text,
+body.dark-mode .legend,
+body.dark-mode .legend-item {
+    color: var(--text-secondary);
+}
+
+body.dark-mode .num-control,
+body.dark-mode .tool-opt,
+body.dark-mode .algo-btn,
+body.dark-mode .toggle-label,
+body.dark-mode .result-item,
+body.dark-mode .stat {
+    background: linear-gradient(180deg, #1f2937 0%, #17202c 100%);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+body.dark-mode .num-btn {
+    background: #0f172a;
+    color: var(--text-secondary);
+}
+
+body.dark-mode .num-btn:hover {
+    background: var(--accent);
+    color: #0b1120;
+}
+
+body.dark-mode .num-control input {
+    background: #111827;
+    color: var(--text-primary);
+}
+
+body.dark-mode .panel-algorithm {
+    background: linear-gradient(135deg, #1d2b3c 0%, #182636 100%);
+    border-color: #406a9a;
+}
+
+body.dark-mode .panel-algorithm h3 {
+    color: #8ec5ff;
+}
+
+body.dark-mode .view-toggle-island {
+    background: #1f2937;
+    border-color: var(--border);
+    box-shadow: 0 6px 20px rgba(0, 0, 0, 0.25);
+}
+
+body.dark-mode .view-toggle-island .view-toggle-btn {
+    color: var(--text-secondary);
+}
+
+body.dark-mode .view-toggle-island .view-toggle-btn:hover {
+    background: #334155;
+    color: var(--text-primary);
+}
+
+body.dark-mode .island-3d-controls .control-btn,
+body.dark-mode .island-3d-info {
+    background: rgba(15, 23, 42, 0.9);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+body.dark-mode .island-3d-info p {
+    color: var(--text-secondary);
+}
+
+body.dark-mode .island-3d-info strong {
+    color: var(--accent);
+}
+
+body.dark-mode .result-modal-island {
+    background: #111827;
+    box-shadow: 0 30px 90px rgba(0, 0, 0, 0.55);
+}
+
+body.dark-mode .big-label {
+    color: var(--text-secondary);
+}
+
+body.dark-mode .stat {
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+}
+
+body.dark-mode .stat strong {
+    color: var(--accent);
 }

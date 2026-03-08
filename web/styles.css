@@ -117,8 +117,36 @@ body {
 }
 
 .nav-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
     color: rgba(255,255,255,0.5);
     font-size: 0.85rem;
+}
+
+.theme-toggle-btn {
+    border: 1px solid rgba(255,255,255,0.32);
+    background: rgba(255,255,255,0.1);
+    color: #f8fafc;
+    padding: 9px 14px;
+    border-radius: 999px;
+    font-size: 0.8rem;
+    font-weight: 700;
+    cursor: pointer;
+    letter-spacing: 0.02em;
+    transition: all 0.25s ease;
+    backdrop-filter: blur(4px);
+}
+
+.theme-toggle-btn:hover {
+    background: rgba(255,255,255,0.2);
+    border-color: rgba(255,255,255,0.55);
+    transform: translateY(-1px);
+}
+
+.theme-toggle-btn.is-dark {
+    background: rgba(15, 23, 42, 0.52);
+    border-color: rgba(148, 163, 184, 0.5);
 }
 
 /* ==================== APP CONTAINER ==================== */
@@ -1420,6 +1448,15 @@ body {
         font-size: 0.85rem;
     }
 
+    .nav-info > span {
+        display: none;
+    }
+
+    .theme-toggle-btn {
+        padding: 8px 12px;
+        font-size: 0.75rem;
+    }
+
     .sidebar {
         width: 260px;
         padding: 16px;
@@ -1758,4 +1795,102 @@ body {
 /* Remove old 3D modal styles - we're using inline now */
 .modal-3d-container {
     display: none;
+}
+
+/* ==================== THEME: DARK MODE ==================== */
+body.dark-mode {
+    --bg-primary: #0f141a;
+    --bg-secondary: #1b232d;
+    --bg-tertiary: #24303d;
+    --text-primary: #edf2f7;
+    --text-secondary: #c9d3df;
+    --text-muted: #93a4b5;
+    --accent: #c8a57a;
+    --accent-hover: #e0bb8f;
+    --accent-light: #435267;
+    --border: #334155;
+    --success: #63c18c;
+    --warning: #d8b165;
+    --danger: #cf7f7f;
+    --info: #7cb5d6;
+    color-scheme: dark;
+}
+
+body.dark-mode .top-nav {
+    background: linear-gradient(135deg, #0b1118 0%, #16202c 100%);
+    box-shadow: 0 4px 30px rgba(0,0,0,0.45);
+}
+
+body.dark-mode .nav-info {
+    color: rgba(226,232,240,0.75);
+}
+
+body.dark-mode .nav-tab {
+    background: rgba(148,163,184,0.12);
+    color: rgba(226,232,240,0.78);
+}
+
+body.dark-mode .nav-tab:hover {
+    background: rgba(148,163,184,0.22);
+    color: #f8fafc;
+}
+
+body.dark-mode .nav-tab.active {
+    background: linear-gradient(135deg, #1e293b 0%, #334155 100%);
+    color: #f8fafc;
+    border-color: rgba(148,163,184,0.5);
+}
+
+body.dark-mode .sidebar {
+    background: linear-gradient(180deg, var(--bg-secondary) 0%, #121a24 100%);
+}
+
+body.dark-mode .panel {
+    background: linear-gradient(180deg, #1f2937 0%, #182230 100%);
+    border-color: rgba(148,163,184,0.22);
+    box-shadow: 0 4px 20px rgba(0,0,0,0.25);
+}
+
+body.dark-mode .tool-btn,
+body.dark-mode .op-btn,
+body.dark-mode .action-btn,
+body.dark-mode .info-item,
+body.dark-mode .node-btn,
+body.dark-mode .result-modal,
+body.dark-mode .modal {
+    background: linear-gradient(180deg, #1f2937 0%, #17202c 100%);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+body.dark-mode .op-btn:hover {
+    background: linear-gradient(135deg, #334155 0%, #1e293b 100%);
+}
+
+body.dark-mode .top-bar {
+    background: linear-gradient(180deg, #121a24 0%, #0f141a 100%);
+}
+
+body.dark-mode .canvas-container {
+    background: linear-gradient(135deg, #0f172a 0%, #111827 50%, #1f2937 100%);
+}
+
+body.dark-mode .view-toggle-container {
+    background: #1f2937;
+    border-color: var(--border);
+}
+
+body.dark-mode .view-3d-controls .control-btn,
+body.dark-mode .view-3d-info-inline {
+    background: rgba(15, 23, 42, 0.9);
+    border-color: var(--border);
+    color: var(--text-primary);
+}
+
+body.dark-mode .view-3d-info-inline p {
+    color: var(--text-secondary);
+}
+
+body.dark-mode .result-modal-content strong {
+    background: linear-gradient(135deg, rgba(200,165,122,0.25), rgba(200,165,122,0.12));
 }

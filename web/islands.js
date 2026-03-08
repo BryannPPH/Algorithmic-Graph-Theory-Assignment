@@ -12,8 +12,10 @@ let island3DView = null;
 let islandViewMode = '2d';
 let isAnimating = false;
 let animationSpeed = 150;
+let themeToggleBtn = null;
 
 function init() {
+    setupThemeToggle();
     generateGrid();
     document.addEventListener('mouseup', () => isDrawing = false);
     setupSizeControls();
@@ -25,6 +27,43 @@ function init() {
             const speedValue = document.getElementById('islandSpeedValue');
             if (speedValue) speedValue.textContent = `${animationSpeed}ms`;
         };
+    }
+}
+
+function setupThemeToggle() {
+    themeToggleBtn = document.getElementById('themeToggleBtn');
+    if (!themeToggleBtn) return;
+
+    const savedTheme = localStorage.getItem('graph-theme');
+    const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+    const initialTheme = savedTheme || (prefersDark ? 'dark' : 'light');
+
+    applyTheme(initialTheme, false);
+
+    themeToggleBtn.onclick = () => {
+        const isDark = document.body.classList.contains('dark-mode');
+        applyTheme(isDark ? 'light' : 'dark');
+    };
+}
+
+function applyTheme(theme, persist = true) {
+    const isDark = theme === 'dark';
+    document.body.classList.toggle('dark-mode', isDark);
+
+    if (themeToggleBtn) {
+        const text = themeToggleBtn.querySelector('.theme-text');
+        if (text) {
+            text.textContent = isDark ? 'Light Mode' : 'Dark Mode';
+        }
+
+        const nextModeLabel = isDark ? 'light mode' : 'dark mode';
+        themeToggleBtn.setAttribute('aria-label', `Aktifkan ${nextModeLabel}`);
+        themeToggleBtn.setAttribute('title', `Aktifkan ${nextModeLabel}`);
+        themeToggleBtn.classList.toggle('is-dark', isDark);
+    }
+
+    if (persist) {
+        localStorage.setItem('graph-theme', theme);
     }
 }
 
