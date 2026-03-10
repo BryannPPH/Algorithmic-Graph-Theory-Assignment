@@ -1123,9 +1123,9 @@ class GraphVisualizer {
         }, 500);
 
         this.isAnimating = false;
-        const pathHtml = order.map(n => `<span class="path-node">${n}</span>`).join('<span class="path-arrow">⚡</span>');
+        const pathHtml = order.map(n => `<span class="path-node">${n}</span>`).join('<span class="path-arrow">-></span>');
         this.showResultModal(`
-            <h3>🔍⚡ DFS Traversal</h3>
+            <h3>🔍 DFS Traversal</h3>
             <p>Pencarian dimulai dari simpul <strong>${startNode}</strong></p>
             <p>Total simpul dikunjungi: <strong>${order.length}</strong> simpul</p>
             <div class="path-display">${pathHtml}</div>
@@ -1213,9 +1213,9 @@ class GraphVisualizer {
         }, 500);
 
         this.isAnimating = false;
-        const pathHtml = order.map(n => `<span class="path-node">${n}</span>`).join('<span class="path-arrow">⚡</span>');
+        const pathHtml = order.map(n => `<span class="path-node">${n}</span>`).join('<span class="path-arrow">-></span>');
         this.showResultModal(`
-            <h3>🌊⚡ BFS Traversal</h3>
+            <h3>🌊 BFS Traversal</h3>
             <p>Pencarian dimulai dari simpul <strong>${startNode}</strong></p>
             <p>Total simpul dikunjungi: <strong>${order.length}</strong> simpul</p>
             <div class="path-display">${pathHtml}</div>
@@ -1303,9 +1303,9 @@ class GraphVisualizer {
                 <p>Simpul <strong>${startNode}</strong> dan <strong>${endNode}</strong> tidak terhubung.</p>
             `);
         } else {
-            const pathHtml = result.path.map(n => `<span class="path-node">${n}</span>`).join('<span class="path-arrow">⚡</span>');
+            const pathHtml = result.path.map(n => `<span class="path-node">${n}</span>`).join('<span class="path-arrow">-></span>');
             this.showResultModal(`
-                <h3>📏⚡ Jalur Terpendek Ditemukan!</h3>
+                <h3>📏 Jalur Terpendek Ditemukan!</h3>
                 <p>Dari simpul <strong>${startNode}</strong> ke simpul <strong>${endNode}</strong></p>
                 <p>Jarak minimum: <strong>${result.distance}</strong> sisi</p>
                 <div class="path-display">${pathHtml}</div>

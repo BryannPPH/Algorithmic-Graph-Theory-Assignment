@@ -3,5 +3,5 @@
 ##Authors
 | Nama                           | NIM      |
 | ------------------------------ | -------- |
-| Ahmad Ramadhan                 | 13222110 |
+| Farrell Limjaya                | 13524042 |
 | Bryan Pratama Putra Hendra     | 13524067 |

@@ -1,8 +1,8 @@
 
 class Graph {
     constructor() {
-        this.nodes = new Map(); // nodeId -> { x, y, label }
-        this.edges = []; // [{ from, to }]
+        this.nodes = new Map();
+        this.edges = [];
         this.directed = false;
         this.nextNodeId = 1;
     }
@@ -46,7 +46,7 @@ class Graph {
                 return (e.from === from && e.to === to) || (e.from === to && e.to === from);
             }
         });
-        
+     
         if (exists) return false;
         
         this.edges.push({ from, to });
@@ -207,7 +207,7 @@ class GraphAlgorithms {
         this.graph = graph;
     }
 
-    // DFS with step-by-step tracking
+    // DFS
     async dfs(startNode, onVisit, onBacktrack) {
         const visited = new Set();
         const order = [];
@@ -233,7 +233,7 @@ class GraphAlgorithms {
         return order;
     }
 
-    // BFS with step-by-step tracking
+    // BFS
     async bfs(startNode, onVisit, onDequeue) {
         const visited = new Set();
         const order = [];
@@ -414,7 +414,7 @@ class GraphAlgorithms {
         return { size: largest.length, nodes: largest.sort((a, b) => a - b) };
     }
 
-    // Count islands in a grid (separate from graph)
+    // Count islands in a grid
     static countIslandsInGrid(grid) {
         if (grid.length === 0) return { islands: 0, largest: 0 };
 

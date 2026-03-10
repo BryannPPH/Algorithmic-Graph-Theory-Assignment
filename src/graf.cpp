@@ -1,304 +1,417 @@
 #include <iostream>
 #include <vector>
+#include <map>
+#include <set>
 #include <queue>
+#include <cmath>
 #include <algorithm>
+#include <climits>
 
 using namespace std;
 
-int n, m;
-bool directed;
+struct Node {
+    double x, y;
+    string label;
+};
 
-vector<vector<int>> adjList;
-vector<vector<int>> adjUndir;
-vector<bool> visited;
+struct Edge {
+    int from, to;
+};
 
-void dfs(int node, const vector<vector<int>>& g){
-    visited[node] = true;
-    for(int neighbor : g[node]){
-        if(!visited[neighbor]) dfs(neighbor, g);
+struct DistanceResult {
+    int distance;
+    vector<int> path;
+};
+
+struct ComponentResult {
+    int size;
+    vector<int> nodes;
+};
+
+struct IslandResult {
+    int islands;
+    int largest;
+};
+
+class Graph {
+public:
+    map<int, Node> nodes;
+    vector<Edge>   edges;
+    bool           directed;
+    int            nextNodeId;
+
+    Graph() : directed(false), nextNodeId(1) {}
+
+    void setDirected(bool dir) {
+        directed = dir;
     }
-}
-
-int dfsSize(int node, const vector<vector<int>>& g){
-    visited[node] = true;
-    int count = 1;
-    for(int neighbor : g[node]){
-        if(!visited[neighbor]) count += dfsSize(neighbor, g);
+    int addNode(double x, double y) {
+        int id = nextNodeId++;
+        nodes[id] = { x, y, to_string(id) };
+        return id;
     }
-    return count;
-}
 
-void showDFS(int node){
-    visited[node] = true;
-    cout << node << ' ';
-    for(int neighbor : adjList[node]){
-        if(!visited[neighbor]) showDFS(neighbor);
+    bool removeNode(int nodeId) {
+        if (nodes.find(nodeId) == nodes.end()) return false;
+
+        nodes.erase(nodeId);
+        edges.erase(
+            remove_if(edges.begin(), edges.end(),
+                [nodeId](const Edge& e) {
+                    return e.from == nodeId || e.to == nodeId;
+                }),
+            edges.end()
+        );
+        return true;
     }
-}
 
-void showBFS(int start){
-    queue<int> q;
-    q.push(start);
-    visited[start] = true;
+    bool moveNode(int nodeId, double x, double y) {
+        if (nodes.find(nodeId) == nodes.end()) return false;
+        nodes[nodeId].x = x;
+        nodes[nodeId].y = y;
+        return true;
+    }
 
-    while(!q.empty()){
-        int node = q.front();
-        q.pop();
+    bool addEdge(int from, int to) {
+        if (nodes.find(from) == nodes.end()) return false;
+        if (nodes.find(to)   == nodes.end()) return false;
+        if (from == to) return false;
 
-        cout << node << " ";
-        for(int neighbor : adjList[node]){
-            if(!visited[neighbor]){
-                visited[neighbor] = true;
-                q.push(neighbor);
+        for (const Edge& e : edges) {
+            if (directed) {
+                if (e.from == from && e.to == to) return false;
+            } else {
+                if ((e.from == from && e.to == to) ||
+                    (e.from == to   && e.to == from)) return false;
             }
         }
+
+        edges.push_back({ from, to });
+        return true;
     }
-}
 
-int dt(int a, int b){
-    queue<int> q;
-    q.push(a);
-    visited[a] = true;
+    bool hasEdge(int from, int to) const {
+        for (const Edge& e : edges) {
+            if (directed) {
+                if (e.from == from && e.to == to) return true;
+            } else {
+                if ((e.from == from && e.to == to) ||
+                    (e.from == to   && e.to == from)) return true;
+            }
+        }
+        return false;
+    }
 
-    int dist = 0;
+    bool removeEdge(int from, int to) {
+        for (auto it = edges.begin(); it != edges.end(); ++it) {
+            bool match = directed
+                ? (it->from == from && it->to == to)
+                : ((it->from == from && it->to == to) ||
+                   (it->from == to   && it->to == from));
+            if (match) {
+                edges.erase(it);
+                return true;
+            }
+        }
+        return false;
+    }
 
-    while(!q.empty()){
-        int sz = (int)q.size();
-        for(int i = 0; i < sz; i++){
-            int node = q.front();
-            q.pop();
+    map<int, vector<int>> getAdjacencyList() const {
+        map<int, vector<int>> adj;
+        for (const auto& kv : nodes) adj[kv.first] = {};
 
-            if(node == b) return dist;
+        for (const Edge& e : edges) {
+            adj[e.from].push_back(e.to);
+            if (!directed) adj[e.to].push_back(e.from);
+        }
+        return adj;
+    }
 
-            for(int neighbor : adjList[node]){
-                if(!visited[neighbor]){
-                    visited[neighbor] = true;
+    map<int, vector<int>> getUndirectedAdjacencyList() const {
+        map<int, vector<int>> adj;
+        for (const auto& kv : nodes) adj[kv.first] = {};
+
+        for (const Edge& e : edges) {
+            adj[e.from].push_back(e.to);
+            adj[e.to].push_back(e.from);
+        }
+        return adj;
+    }
+
+    vector<int> getNeighbors(int nodeId) const {
+        vector<int> neighbors;
+        if (nodes.find(nodeId) == nodes.end()) return neighbors;
+
+        for (const Edge& e : edges) {
+            if (e.from == nodeId) {
+                neighbors.push_back(e.to);
+            } else if (!directed && e.to == nodeId) {
+                neighbors.push_back(e.from);
+            }
+        }
+        return neighbors;
+    }
+
+    void clear() {
+        nodes.clear();
+        edges.clear();
+        nextNodeId = 1;
+    }
+
+    int getNodeAtPosition(double x, double y, double radius = 25.0) const {
+        for (const auto& kv : nodes) {
+            double dx = kv.second.x - x;
+            double dy = kv.second.y - y;
+            if (dx*dx + dy*dy <= radius*radius) return kv.first;
+        }
+        return -1;
+    }
+
+    double pointToLineDistance(double px, double py, double x1, double y1, double x2, double y2) const {
+        double A = px - x1, B = py - y1;
+        double C = x2 - x1, D = y2 - y1;
+
+        double dot   = A*C + B*D;
+        double lenSq = C*C + D*D;
+        double param = (lenSq != 0) ? dot / lenSq : -1;
+
+        double xx, yy;
+        if (param < 0) { xx = x1; yy = y1; }
+        else if (param > 1) { xx = x2; yy = y2; }
+        else { xx = x1 + param*C; yy = y1 + param*D; }
+
+        double dx = px - xx, dy = py - yy;
+        return sqrt(dx*dx + dy*dy);
+    }
+
+    // Cari edge terdekat dari posisi (x, y)
+    const Edge* getEdgeAtPosition(double x, double y, double threshold = 10.0) const {
+        for (const Edge& e : edges) {
+            const Node& from = nodes.at(e.from);
+            const Node& to   = nodes.at(e.to);
+            if (pointToLineDistance(x, y, from.x, from.y, to.x, to.y) <= threshold)
+                return &e;
+        }
+        return nullptr;
+    }
+};
+
+
+class GraphAlgorithms {
+    const Graph& graph;
+
+public:
+    explicit GraphAlgorithms(const Graph& g) : graph(g) {}
+
+    vector<int> dfs(int startNode) const {
+        set<int> visited;
+        vector<int> order;
+        auto adj = graph.getAdjacencyList();
+
+        function<void(int)> dfsRec = [&](int node) {
+            visited.insert(node);
+            order.push_back(node);
+            for (int neighbor : adj[node]) {
+                if (!visited.count(neighbor))
+                    dfsRec(neighbor);
+            }
+        };
+
+        dfsRec(startNode);
+        return order;
+    }
+
+    vector<int> bfs(int startNode) const {
+        set<int> visited;
+        vector<int> order;
+        queue<int> q;
+        auto adj = graph.getAdjacencyList();
+
+        visited.insert(startNode);
+        q.push(startNode);
+
+        while (!q.empty()) {
+            int node = q.front(); q.pop();
+            order.push_back(node);
+
+            for (int neighbor : adj[node]) {
+                if (!visited.count(neighbor)) {
+                    visited.insert(neighbor);
                     q.push(neighbor);
                 }
             }
         }
-        dist++;
+        return order;
     }
-    return -1;
-}
 
-int countComponentsUndir(){
-    fill(visited.begin(), visited.end(), false);
-    int count = 0;
-    for(int i = 1; i <= n; i++){
-        if(!visited[i]){
-            dfs(i, adjUndir);
-            count++;
+    DistanceResult distance(int startNode, int endNode) const {
+        set<int> visited;
+        map<int, int> parent;   
+        queue<pair<int,int>> q;    
+        auto adj = graph.getAdjacencyList();
+
+        visited.insert(startNode);
+        parent[startNode] = -1;
+        q.push({ startNode, 0 });
+
+        while (!q.empty()) {
+            auto [node, dist] = q.front(); q.pop();
+
+            if (node == endNode) {
+                // Rekonstruksi jalur
+                vector<int> path;
+                int curr = endNode;
+                while (curr != -1) {
+                    path.push_back(curr);
+                    curr = parent[curr];
+                }
+                reverse(path.begin(), path.end());
+                return { dist, path };
+            }
+
+            for (int neighbor : adj[node]) {
+                if (!visited.count(neighbor)) {
+                    visited.insert(neighbor);
+                    parent[neighbor] = node;
+                    q.push({ neighbor, dist + 1 });
+                }
+            }
         }
+
+        return { -1, {} };
     }
-    return count;
-}
 
-pair<int, vector<int>> largestComponent(){
-    fill(visited.begin(), visited.end(), false);
+    bool isConnected() const {
+        auto nodeList = getNodeIds();
+        if (nodeList.empty()) return true;
 
-    int bestSize = 0;
-    vector<int> bestNodes;
+        set<int> visited;
+        auto adj = graph.getUndirectedAdjacencyList();
+        dfsHelper(nodeList[0], adj, visited);
+        return (int)visited.size() == (int)nodeList.size();
+    }
 
-    for(int i = 1; i <= n; i++){
-        if(!visited[i]){
-            vector<int> nodes;
-            queue<int> q;
-            q.push(i);
-            visited[i] = true;
+    int countComponents() const {
+        auto nodeList = getNodeIds();
+        set<int> visited;
+        auto adj = graph.getUndirectedAdjacencyList();
+        int count = 0;
 
-            while(!q.empty()){
-                int u = q.front(); q.pop();
-                nodes.push_back(u);
+        for (int node : nodeList) {
+            if (!visited.count(node)) {
+                dfsHelper(node, adj, visited);
+                count++;
+            }
+        }
+        return count;
+    }
 
-                for(int v : adjUndir[u]){
-                    if(!visited[v]){
-                        visited[v] = true;
-                        q.push(v);
+    ComponentResult getComponentSize(int startNode) const {
+        set<int> visited;
+        vector<int> comp;
+        auto adj = graph.getUndirectedAdjacencyList();
+
+        function<void(int)> dfs = [&](int node) {
+            visited.insert(node);
+            comp.push_back(node);
+            for (int nb : adj.at(node))
+                if (!visited.count(nb)) dfs(nb);
+        };
+
+        dfs(startNode);
+        return { (int)comp.size(), comp };
+    }
+
+    vector<vector<int>> getAllComponents() const {
+        auto nodeList = getNodeIds();
+        set<int> visited;
+        auto adj = graph.getUndirectedAdjacencyList();
+        vector<vector<int>> components;
+
+        for (int node : nodeList) {
+            if (!visited.count(node)) {
+                vector<int> comp;
+                function<void(int)> dfs = [&](int n) {
+                    visited.insert(n);
+                    comp.push_back(n);
+                    for (int nb : adj.at(n))
+                        if (!visited.count(nb)) dfs(nb);
+                };
+                dfs(node);
+                components.push_back(comp);
+            }
+        }
+        return components;
+    }
+
+    ComponentResult getLargestComponent() const {
+        auto comps = getAllComponents();
+        if (comps.empty()) return { 0, {} };
+
+        vector<int>* largest = &comps[0];
+        for (auto& c : comps)
+            if (c.size() > largest->size()) largest = &c;
+
+        sort(largest->begin(), largest->end());
+        return { (int)largest->size(), *largest };
+    }
+
+    static IslandResult countIslandsInGrid(const vector<vector<int>>& grid) {
+        if (grid.empty()) return { 0, 0 };
+
+        int rows = grid.size();
+        int cols = grid[0].size();
+        vector<vector<bool>> visited(rows, vector<bool>(cols, false));
+
+        int islands = 0, largest = 0;
+        int dr[] = { -1, 1, 0, 0 };
+        int dc[] = {  0, 0,-1, 1 };
+
+        auto bfs = [&](int startR, int startC) -> int {
+            queue<pair<int,int>> q;
+            q.push({ startR, startC });
+            visited[startR][startC] = true;
+            int size = 0;
+
+            while (!q.empty()) {
+                auto [r, c] = q.front(); q.pop();
+                size++;
+                for (int k = 0; k < 4; k++) {
+                    int nr = r + dr[k], nc = c + dc[k];
+                    if (nr >= 0 && nr < rows && nc >= 0 && nc < cols &&
+                        grid[nr][nc] == 1 && !visited[nr][nc]) {
+                        visited[nr][nc] = true;
+                        q.push({ nr, nc });
                     }
                 }
             }
+            return size;
+        };
 
-            if((int)nodes.size() > bestSize){
-                bestSize = (int)nodes.size();
-                bestNodes = nodes;
-            }
-        }
-    }
-
-    sort(bestNodes.begin(), bestNodes.end());
-    return {bestSize, bestNodes};
-}
-
-bool inBounds(int r, int c, int R, int C){
-    return r >= 0 && r < R && c >= 0 && c < C;
-}
-
-pair<int,int> countIslandsAndLargest(vector<vector<int>>& grid){
-    int R = (int)grid.size();
-    int C = (R ? (int)grid[0].size() : 0);
-
-    vector<vector<bool>> vis(R, vector<bool>(C, false));
-    int islands = 0;
-    int largest = 0;
-
-    int dr[4] = {-1, 1, 0, 0};
-    int dc[4] = {0, 0, -1, 1};
-
-    for(int i = 0; i < R; i++){
-        for(int j = 0; j < C; j++){
-            if(grid[i][j] == 1 && !vis[i][j]){
-                islands++;
-                int sz = 0;
-
-                queue<pair<int,int>> q;
-                q.push({i,j});
-                vis[i][j] = true;
-
-                while(!q.empty()){
-                    auto [r,c] = q.front(); q.pop();
-                    sz++;
-
-                    for(int k = 0; k < 4; k++){
-                        int nr = r + dr[k];
-                        int nc = c + dc[k];
-                        if(inBounds(nr,nc,R,C) && grid[nr][nc] == 1 && !vis[nr][nc]){
-                            vis[nr][nc] = true;
-                            q.push({nr,nc});
-                        }
-                    }
-                }
-
-                largest = max(largest, sz);
-            }
-        }
-    }
-
-    return {islands, largest};
-}
-
-int main(){
-    cout << "Input jumlah simpul graf: ";
-    cin >> n;
-    cout << "Input jumlah sisi graf: ";
-    cin >> m;
-
-    adjList.assign(n+1, {});
-    adjUndir.assign(n+1, {});
-    visited.assign(n+1, false);
-
-    cout << "\nApakah graf berarah?\n";
-    cout << "0. Tidak (Undirected)\n";
-    cout << "1. Ya (Directed)\n";
-    cout << "Pilihan: ";
-    cin >> directed;
-
-    cout << "\nInput sisi (u v), contoh: 1 2\n";
-    for(int i = 0; i < m; i++){
-        int u, v;
-        cin >> u >> v;
-
-        adjList[u].push_back(v);
-        if(!directed) adjList[v].push_back(u);
-
-        adjUndir[u].push_back(v);
-        adjUndir[v].push_back(u);
-    }
-
-    for(;;){
-        fill(visited.begin(), visited.end(), false);
-
-        cout << "\n\nMenu Operasi Graf\n";
-        cout << "1. Jarak dari simpul a ke simpul b\n";
-        cout << "2. Cek apakah graf terhubung\n";
-        cout << "3. Size dari komponen (berdasarkan simpul)\n";
-        cout << "4. Jumlah komponen\n";
-        cout << "5. DFS dari simpul A\n";
-        cout << "6. BFS dari simpul A\n";
-        cout << "7. Komponen terbesar\n";
-        cout << "8. Hitung jumlah island dari matriks 0/1\n";
-        cout << "9. Keluar\n";
-        cout << "Input pilihan (1-9): ";
-
-        int x;
-        cin >> x;
-        cout << '\n';
-
-        if(x == 1){
-            cout << "Masukkan simpul a dan simpul b: ";
-            int a, b; cin >> a >> b;
-
-            fill(visited.begin(), visited.end(), false);
-            int ans = dt(a, b);
-
-            if(ans == -1) cout << "Simpul a dan simpul b tidak terhubung\n";
-            else cout << "Jarak dari a ke b adalah " << ans << '\n';
-
-        }else if(x == 2){
-            int cc = countComponentsUndir();
-            if(cc == 1) cout << "Ya, graf terhubung\n";
-            else cout << "Tidak, graf tidak terhubung. Jumlah komponen: " << cc << '\n';
-
-        }else if(x == 3){
-            cout << "Masukkan simpul: ";
-            int input; cin >> input;
-
-            fill(visited.begin(), visited.end(), false);
-            int sz = dfsSize(input, adjUndir);
-            cout << "Ukuran komponen dari simpul " << input << " adalah " << sz << '\n';
-
-        }else if(x == 4){
-            cout << "Jumlah komponen = " << countComponentsUndir() << '\n';
-
-        }else if(x == 5){
-            cout << "Masukkan simpul awal DFS: ";
-            int input; cin >> input;
-
-            fill(visited.begin(), visited.end(), false);
-            cout << "Hasil DFS:\n";
-            showDFS(input);
-            cout << '\n';
-
-        }else if(x == 6){
-            cout << "Masukkan simpul awal BFS: ";
-            int input; cin >> input;
-
-            fill(visited.begin(), visited.end(), false);
-            cout << "Hasil BFS:\n";
-            showBFS(input);
-            cout << '\n';
-
-        }else if(x == 7){
-            auto [sz, nodes] = largestComponent();
-            cout << "Ukuran komponen terbesar = " << sz << '\n';
-            cout << "Simpul dalam komponen terbesar: ";
-            for(int v : nodes) cout << v << ' ';
-            cout << '\n';
-
-        }else if(x == 8){
-            int R, C;
-            cout << "Masukkan jumlah baris (R) dan kolom (C): ";
-            cin >> R >> C;
-
-            vector<vector<int>> grid(R, vector<int>(C));
-            cout << "Masukkan matriks 0/1:\n";
-            for(int i = 0; i < R; i++){
-                for(int j = 0; j < C; j++){
-                    cin >> grid[i][j];
+        for (int i = 0; i < rows; i++) {
+            for (int j = 0; j < cols; j++) {
+                if (grid[i][j] == 1 && !visited[i][j]) {
+                    islands++;
+                    largest = max(largest, bfs(i, j));
                 }
             }
-
-            auto [islands, largest] = countIslandsAndLargest(grid);
-            cout << "Jumlah island = " << islands << '\n';
-            cout << "Ukuran island terbesar = " << largest << '\n';
-
-        }else if(x == 9){
-            break;
-
-        }else{
-            cout << "Input tidak valid!\n";
         }
+
+        return { islands, largest };
     }
 
-    return 0;
-}
+private:
+    vector<int> getNodeIds() const {
+        vector<int> ids;
+        for (const auto& kv : graph.nodes) ids.push_back(kv.first);
+        return ids;
+    }
+
+    void dfsHelper(int node,
+                   const map<int, vector<int>>& adj,
+                   set<int>& visited) const {
+        visited.insert(node);
+        for (int nb : adj.at(node))
+            if (!visited.count(nb)) dfsHelper(nb, adj, visited);
+    }
+};
