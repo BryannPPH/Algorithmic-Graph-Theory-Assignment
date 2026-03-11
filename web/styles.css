@@ -368,6 +368,44 @@ body {
 
 /* Special Operation Button */
 .op-special {
+    background: linear-gradient(135deg, #E8F0FE 0%, #D4E4FC 100%);
+    border-color: #90CAF9;
+    position: relative;
+    padding-right: 80px;
+}
+
+.op-special:hover {
+    background: linear-gradient(135deg, #D4E4FC, #BBDEFB);
+    border-color: #64B5F6;
+}
+
+/* Operation Badge */
+.op-badge {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 0.6rem;
+    padding: 3px 8px;
+    background: linear-gradient(135deg, #2196F3, #1976D2);
+    color: white;
+    border-radius: 10px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    box-shadow: 0 2px 4px rgba(33, 150, 243, 0.3);
+}
+
+.op-btn.op-special::before {
+    background: linear-gradient(180deg, #2196F3, #1976D2);
+}
+
+.op-btn.op-special:hover::before {
+    transform: scaleY(1);
+}
+
+/* Special Operation Button */
+.op-special {
     background: linear-gradient(135deg, #E3F2FD, #BBDEFB);
     border-color: #90CAF9;
     position: relative;
@@ -1893,4 +1931,18 @@ body.dark-mode .view-3d-info-inline p {
 
 body.dark-mode .result-modal-content strong {
     background: linear-gradient(135deg, rgba(200,165,122,0.25), rgba(200,165,122,0.12));
+}
+
+body.dark-mode .op-btn.op-special {
+    background: linear-gradient(135deg, #1a2744 0%, #1e3a5f 100%);
+    border-color: #406a9a;
+}
+
+body.dark-mode .op-btn.op-special:hover {
+    background: linear-gradient(135deg, #1e3a5f 0%, #264a6e 100%);
+    border-color: #5a8ab5;
+}
+
+body.dark-mode .op-badge {
+    background: linear-gradient(135deg, #1976D2, #1565C0);
 }

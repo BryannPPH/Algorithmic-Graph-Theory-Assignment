@@ -1,4 +1,3 @@
-
 class Graph {
     constructor() {
         this.nodes = new Map();
@@ -412,6 +411,330 @@ class GraphAlgorithms {
         }
 
         return { size: largest.length, nodes: largest.sort((a, b) => a - b) };
+    }
+
+    // ==================== TUGAS 3: NEW ALGORITHMS ====================
+
+    // Check if graph is bipartite using BFS 2-coloring
+    async isBipartite(onVisit) {
+        const nodes = Array.from(this.graph.nodes.keys());
+        if (nodes.length === 0) return { isBipartite: true, setA: [], setB: [] };
+
+        const color = new Map(); // 0 or 1
+        const adj = this.graph.getUndirectedAdjacencyList();
+        let bipartite = true;
+        const setA = [];
+        const setB = [];
+
+        for (const startNode of nodes) {
+            if (color.has(startNode)) continue;
+
+            const queue = [startNode];
+            color.set(startNode, 0);
+
+            while (queue.length > 0 && bipartite) {
+                const node = queue.shift();
+                const c = color.get(node);
+
+                if (onVisit) await onVisit(node, c);
+
+                const neighbors = adj.get(node) || [];
+                for (const neighbor of neighbors) {
+                    if (!color.has(neighbor)) {
+                        color.set(neighbor, 1 - c);
+                        queue.push(neighbor);
+                    } else if (color.get(neighbor) === c) {
+                        bipartite = false;
+                        break;
+                    }
+                }
+            }
+
+            if (!bipartite) break;
+        }
+
+        if (bipartite) {
+            for (const [node, c] of color.entries()) {
+                if (c === 0) setA.push(node);
+                else setB.push(node);
+            }
+        }
+
+        return { isBipartite: bipartite, setA, setB, colorMap: color };
+    }
+
+    // Compute graph diameter using BFS from every node
+    async getDiameter(onProgress) {
+        const nodes = Array.from(this.graph.nodes.keys());
+        if (nodes.length === 0) return { diameter: 0, from: null, to: null, path: [] };
+        
+        const adj = this.graph.getUndirectedAdjacencyList();
+        let maxDist = 0;
+        let diamFrom = null;
+        let diamTo = null;
+        let diamPath = [];
+
+        for (const startNode of nodes) {
+            // BFS from startNode
+            const dist = new Map();
+            const parent = new Map();
+            const queue = [startNode];
+            dist.set(startNode, 0);
+            parent.set(startNode, null);
+
+            while (queue.length > 0) {
+                const node = queue.shift();
+                const neighbors = adj.get(node) || [];
+                for (const neighbor of neighbors) {
+                    if (!dist.has(neighbor)) {
+                        dist.set(neighbor, dist.get(node) + 1);
+                        parent.set(neighbor, node);
+                        queue.push(neighbor);
+                    }
+                }
+            }
+
+            // Check max distance from this node
+            for (const [node, d] of dist.entries()) {
+                if (d > maxDist) {
+                    maxDist = d;
+                    diamFrom = startNode;
+                    diamTo = node;
+                    // Reconstruct path
+                    diamPath = [];
+                    let cur = node;
+                    while (cur !== null) {
+                        diamPath.unshift(cur);
+                        cur = parent.get(cur);
+                    }
+                }
+            }
+
+            if (onProgress) await onProgress(startNode, maxDist);
+        }
+
+        // Check if graph is disconnected (some nodes unreachable)
+        const isConnected = this.isConnected();
+        if (!isConnected) {
+            return { diameter: Infinity, from: null, to: null, path: [], disconnected: true };
+        }
+
+        return { diameter: maxDist, from: diamFrom, to: diamTo, path: diamPath, disconnected: false };
+    }
+
+    // Detect cycle using DFS
+    async detectCycle(onVisit) {
+        const nodes = Array.from(this.graph.nodes.keys());
+        if (nodes.length === 0) return { hasCycle: false, cycle: [] };
+
+        const adj = this.graph.getAdjacencyList();
+        const visited = new Set();
+        const parent = new Map();
+        let cycleNodes = [];
+        let found = false;
+
+        if (this.graph.directed) {
+            // Directed: use colors (WHITE=0, GRAY=1, BLACK=2)
+            const state = new Map(); // 0=white, 1=gray, 2=black
+            const predecessor = new Map();
+
+            for (const node of nodes) state.set(node, 0);
+
+            const dfs = async (node) => {
+                if (found) return;
+                state.set(node, 1); // GRAY
+                if (onVisit) await onVisit(node, 'visiting');
+
+                const neighbors = adj.get(node) || [];
+                for (const neighbor of neighbors) {
+                    if (found) return;
+                    if (state.get(neighbor) === 1) {
+                        // Back edge found → cycle!
+                        found = true;
+                        cycleNodes = [neighbor];
+                        let cur = node;
+                        while (cur !== neighbor) {
+                            cycleNodes.push(cur);
+                            cur = predecessor.get(cur);
+                        }
+                        cycleNodes.push(neighbor);
+                        cycleNodes.reverse();
+                        return;
+                    }
+                    if (state.get(neighbor) === 0) {
+                        predecessor.set(neighbor, node);
+                        await dfs(neighbor);
+                    }
+                }
+
+                state.set(node, 2); // BLACK
+            };
+
+            for (const node of nodes) {
+                if (state.get(node) === 0 && !found) {
+                    await dfs(node);
+                }
+            }
+        } else {
+            // Undirected: track parent to avoid trivial back edge
+            const dfs = async (node, par) => {
+                if (found) return;
+                visited.add(node);
+                parent.set(node, par);
+                if (onVisit) await onVisit(node, 'visiting');
+
+                const neighbors = adj.get(node) || [];
+                for (const neighbor of neighbors) {
+                    if (found) return;
+                    if (!visited.has(neighbor)) {
+                        await dfs(neighbor, node);
+                    } else if (neighbor !== par) {
+                        // Cycle found
+                        found = true;
+                        cycleNodes = [neighbor];
+                        let cur = node;
+                        while (cur !== neighbor) {
+                            cycleNodes.push(cur);
+                            cur = parent.get(cur);
+                        }
+                        cycleNodes.push(neighbor);
+                        cycleNodes.reverse();
+                        return;
+                    }
+                }
+            };
+
+            for (const node of nodes) {
+                if (!visited.has(node) && !found) {
+                    await dfs(node, null);
+                }
+            }
+        }
+
+        return { hasCycle: found, cycle: cycleNodes };
+    }
+
+    // Find girth (shortest cycle) using BFS from each node
+    async getGirth(onProgress) {
+        const nodes = Array.from(this.graph.nodes.keys());
+        if (nodes.length === 0) return { girth: Infinity, cycle: [] };
+
+        const adj = this.graph.getUndirectedAdjacencyList();
+        let minGirth = Infinity;
+        let bestCycle = [];
+
+        for (const startNode of nodes) {
+            // BFS from startNode, track distances and parents
+            const dist = new Map();
+            const parentMap = new Map();
+            const queue = [startNode];
+            dist.set(startNode, 0);
+            parentMap.set(startNode, null);
+
+            let foundCycle = false;
+
+            while (queue.length > 0 && !foundCycle) {
+                const node = queue.shift();
+                const d = dist.get(node);
+
+                const neighbors = adj.get(node) || [];
+                for (const neighbor of neighbors) {
+                    if (!dist.has(neighbor)) {
+                        dist.set(neighbor, d + 1);
+                        parentMap.set(neighbor, node);
+                        queue.push(neighbor);
+                    } else if (parentMap.get(node) !== neighbor) {
+                        // Found a cycle
+                        const cycleLen = d + dist.get(neighbor) + 1;
+                        if (cycleLen < minGirth) {
+                            minGirth = cycleLen;
+                            // Reconstruct cycle
+                            const pathA = [];
+                            let cur = node;
+                            while (cur !== null) {
+                                pathA.push(cur);
+                                cur = parentMap.get(cur);
+                            }
+                            const pathB = [];
+                            cur = neighbor;
+                            while (cur !== null) {
+                                pathB.push(cur);
+                                cur = parentMap.get(cur);
+                            }
+                            // Find LCA and build cycle
+                            const setA = new Set(pathA);
+                            let lca = null;
+                            for (const n of pathB) {
+                                if (setA.has(n)) { lca = n; break; }
+                            }
+                            if (lca !== null) {
+                                const cyclePartA = [];
+                                for (const n of pathA) {
+                                    cyclePartA.push(n);
+                                    if (n === lca) break;
+                                }
+                                const cyclePartB = [];
+                                for (const n of pathB) {
+                                    if (n === lca) break;
+                                    cyclePartB.push(n);
+                                }
+                                bestCycle = [...cyclePartA, ...cyclePartB.reverse(), cyclePartA[0]];
+                            }
+                        }
+                        foundCycle = true;
+                        break;
+                    }
+                }
+            }
+
+            if (onProgress) await onProgress(startNode, minGirth);
+        }
+
+        // For directed graphs, use a different approach
+        if (this.graph.directed) {
+            const dirAdj = this.graph.getAdjacencyList();
+            minGirth = Infinity;
+            bestCycle = [];
+
+            for (const startNode of nodes) {
+                // BFS in directed graph
+                const dist = new Map();
+                const parentMap = new Map();
+                const queue = [startNode];
+                dist.set(startNode, 0);
+                parentMap.set(startNode, null);
+
+                while (queue.length > 0) {
+                    const node = queue.shift();
+                    const d = dist.get(node);
+
+                    if (d >= minGirth) break;
+
+                    const neighbors = dirAdj.get(node) || [];
+                    for (const neighbor of neighbors) {
+                        if (neighbor === startNode && d + 1 < minGirth) {
+                            minGirth = d + 1;
+                            // Reconstruct
+                            bestCycle = [startNode];
+                            let cur = node;
+                            while (cur !== startNode && cur !== null) {
+                                bestCycle.push(cur);
+                                cur = parentMap.get(cur);
+                            }
+                            bestCycle.reverse();
+                            bestCycle.push(startNode);
+                        }
+                        if (!dist.has(neighbor)) {
+                            dist.set(neighbor, d + 1);
+                            parentMap.set(neighbor, node);
+                            queue.push(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+
+        return { girth: minGirth, cycle: bestCycle };
     }
 
     // Count islands in a grid

@@ -443,6 +443,12 @@ class GraphVisualizer {
         document.getElementById('opCountComponents').onclick = () => this.runCountComponents();
         document.getElementById('opLargestComponent').onclick = () => this.runLargestComponent();
 
+        // Tugas 3 operations
+        document.getElementById('opBipartite').onclick = () => this.runBipartite();
+        document.getElementById('opDiameter').onclick = () => this.runDiameter();
+        document.getElementById('opCycle').onclick = () => this.runDetectCycle();
+        document.getElementById('opGirth').onclick = () => this.runGirth();
+
         // Actions
         document.getElementById('clearGraph').onclick = () => {
             if (confirm('Hapus semua?')) {
@@ -1450,6 +1456,429 @@ class GraphVisualizer {
         reader.readAsText(file);
         event.target.value = '';
     }
+
+    // ==================== TUGAS 3: NEW ALGORITHM RUNNERS ====================
+
+    async runBipartite() {
+        if (this.isAnimating) return;
+        if (this.graph.nodes.size === 0) {
+            this.showToast('Tidak ada simpul!', 'error');
+            return;
+        }
+        
+        this.isAnimating = true;
+        this.resetVisualization();
+        this.electricNodes.clear();
+        this.electricEdges.clear();
+
+        const delay = () => new Promise(r => setTimeout(r, this.animationSpeed));
+        const colorA = '#667eea'; // Purple-blue for set A
+        const colorB = '#f093fb'; // Pink for set B
+
+        const result = await this.algorithms.isBipartite(async (node, colorIdx) => {
+            const c = colorIdx === 0 ? colorA : colorB;
+            this.nodeColors.set(node, c);
+            this.electricNodes.add(node);
+            
+            const nodeData = this.graph.nodes.get(node);
+            if (nodeData) {
+                for (let i = 0; i < 5; i++) {
+                    this.createElectricParticle(nodeData.x, nodeData.y, c);
+                }
+                this.createShockwave(nodeData.x, nodeData.y, c);
+            }
+            
+            if (this.graph3DView && this.viewMode === '3d') {
+                this.graph3DView.highlightNode(node, colorIdx === 0 ? 0x667eea : 0xf093fb);
+            }
+            
+            await delay();
+        });
+
+        setTimeout(() => {
+            this.electricNodes.clear();
+            this.electricEdges.clear();
+        }, 500);
+
+        this.isAnimating = false;
+
+        if (result.isBipartite) {
+            // Keep colors to show bipartition
+            for (const node of result.setA) {
+                this.nodeColors.set(node, colorA);
+            }
+            for (const node of result.setB) {
+                this.nodeColors.set(node, colorB);
+            }
+
+            const setAHtml = result.setA.sort((a, b) => a - b).map(n => `<span class="path-node" style="background:linear-gradient(135deg, #667eea, #764ba2)">${n}</span>`).join(' ');
+            const setBHtml = result.setB.sort((a, b) => a - b).map(n => `<span class="path-node" style="background:linear-gradient(135deg, #f093fb, #f5576c)">${n}</span>`).join(' ');
+
+            this.showResultModal(`
+                <h3>🎨 Graf adalah Bipartite!</h3>
+                <p>Graf ini <strong>bipartite</strong> — dapat dibagi menjadi 2 himpunan tanpa sisi dalam satu himpunan.</p>
+                <div style="margin-top:16px">
+                    <p><strong>Himpunan A</strong> <span class="color-dot" style="background:#667eea;display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:middle;margin-left:6px"></span> (${result.setA.length} simpul):</p>
+                    <div class="path-display">${setAHtml}</div>
+                </div>
+                <div style="margin-top:16px">
+                    <p><strong>Himpunan B</strong> <span class="color-dot" style="background:#f093fb;display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:middle;margin-left:6px"></span> (${result.setB.length} simpul):</p>
+                    <div class="path-display">${setBHtml}</div>
+                </div>
+            `);
+        } else {
+            // Highlight all nodes red
+            for (const id of this.graph.nodes.keys()) {
+                this.nodeColors.set(id, '#f5576c');
+            }
+
+            this.showResultModal(`
+                <h3>❌ Graf Bukan Bipartite</h3>
+                <p>Graf ini <strong>tidak bipartite</strong> — terdapat siklus ganjil sehingga tidak dapat dibagi menjadi 2 himpunan.</p>
+                <p style="margin-top:12px;color:var(--text-muted);font-size:0.95rem">💡 Sebuah graf adalah bipartite jika dan hanya jika tidak memiliki siklus dengan panjang ganjil.</p>
+            `);
+        }
+    }
+
+    async runDiameter() {
+        if (this.isAnimating) return;
+        if (this.graph.nodes.size === 0) {
+            this.showToast('Tidak ada simpul!', 'error');
+            return;
+        }
+
+        this.isAnimating = true;
+        this.resetVisualization();
+        this.electricNodes.clear();
+        this.electricEdges.clear();
+
+        const delay = () => new Promise(r => setTimeout(r, this.animationSpeed / 3));
+        const searchColor = '#C4A35A';
+        const pathColor = '#4facfe';
+
+        // Show progress as we compute from each node
+        let processed = 0;
+        const total = this.graph.nodes.size;
+
+        const result = await this.algorithms.getDiameter(async (node, currentMax) => {
+            processed++;
+            this.nodeColors.set(node, searchColor);
+            
+            const nodeData = this.graph.nodes.get(node);
+            if (nodeData) {
+                for (let i = 0; i < 3; i++) {
+                    this.createElectricParticle(nodeData.x, nodeData.y, searchColor);
+                }
+            }
+            
+            await delay();
+            
+            // Reset color after processing
+            setTimeout(() => {
+                if (!this.electricNodes.has(node)) {
+                    this.nodeColors.delete(node);
+                }
+            }, 200);
+        });
+
+        if (result.disconnected) {
+            this.isAnimating = false;
+            this.showResultModal(`
+                <h3>⚠️ Graf Tidak Terhubung</h3>
+                <p>Diameter tidak terdefinisi karena graf <strong>tidak terhubung</strong>.</p>
+                <p>Diameter = <strong>∞ (tak hingga)</strong></p>
+                <p style="margin-top:12px;color:var(--text-muted);font-size:0.95rem">💡 Diameter hanya terdefinisi pada graf terhubung. Hubungkan semua komponen terlebih dahulu.</p>
+            `);
+            return;
+        }
+
+        // Animate the diameter path with lightning
+        this.resetVisualization();
+        
+        if (result.path.length > 0) {
+            this.nodeColors.set(result.from, '#4A7C59');
+            this.nodeColors.set(result.to, '#9E4A4A');
+            this.electricNodes.add(result.from);
+            this.electricNodes.add(result.to);
+
+            const startData = this.graph.nodes.get(result.from);
+            const endData = this.graph.nodes.get(result.to);
+            if (startData) this.createShockwave(startData.x, startData.y, '#4A7C59');
+            if (endData) this.createShockwave(endData.x, endData.y, '#9E4A4A');
+
+            await new Promise(r => setTimeout(r, this.animationSpeed));
+
+            for (let i = 0; i < result.path.length - 1; i++) {
+                const from = result.path[i];
+                const to = result.path[i + 1];
+                
+                const fromData = this.graph.nodes.get(from);
+                const toData = this.graph.nodes.get(to);
+                
+                if (fromData && toData) {
+                    this.createLightningBolt(fromData.x, fromData.y, toData.x, toData.y, pathColor);
+                    this.electricEdges.add(`${from}-${to}`);
+                }
+                
+                this.edgeColors.set(`${from}-${to}`, pathColor);
+                this.edgeColors.set(`${to}-${from}`, pathColor);
+                if (to !== result.from && to !== result.to) {
+                    this.nodeColors.set(to, pathColor);
+                }
+                this.electricNodes.add(to);
+                
+                if (this.graph3DView && this.viewMode === '3d') {
+                    this.graph3DView.highlightEdge(from, to, 0x4facfe);
+                    this.graph3DView.highlightNode(to, 0x4facfe);
+                }
+                
+                await new Promise(r => setTimeout(r, this.animationSpeed));
+            }
+
+            this.nodeColors.set(result.from, '#4A7C59');
+            this.nodeColors.set(result.to, '#9E4A4A');
+        }
+
+        setTimeout(() => {
+            this.electricNodes.clear();
+            this.electricEdges.clear();
+        }, 500);
+
+        this.isAnimating = false;
+
+        const pathHtml = result.path.map((n, i) => {
+            let style = '';
+            if (i === 0) style = 'background:linear-gradient(135deg, #4A7C59, #3a6b48)';
+            else if (i === result.path.length - 1) style = 'background:linear-gradient(135deg, #9E4A4A, #8a3d3d)';
+            return `<span class="path-node" ${style ? `style="${style}"` : ''}>${n}</span>`;
+        }).join('<span class="path-arrow">→</span>');
+
+        this.showResultModal(`
+            <h3>📐 Diameter Graf</h3>
+            <p>Diameter: <strong>${result.diameter}</strong> sisi</p>
+            <p>Jalur terpanjang dari simpul <strong>${result.from}</strong> ke simpul <strong>${result.to}</strong></p>
+            <div class="path-display">${pathHtml}</div>
+            <p style="margin-top:16px;color:var(--text-muted);font-size:0.9rem">💡 Diameter adalah jarak terpanjang di antara semua pasangan simpul terpendek dalam graf.</p>
+        `);
+    }
+
+    async runDetectCycle() {
+        if (this.isAnimating) return;
+        if (this.graph.nodes.size === 0) {
+            this.showToast('Tidak ada simpul!', 'error');
+            return;
+        }
+
+        this.isAnimating = true;
+        this.resetVisualization();
+        this.electricNodes.clear();
+        this.electricEdges.clear();
+
+        const delay = () => new Promise(r => setTimeout(r, this.animationSpeed));
+        const searchColor = '#C4A35A';
+        const cycleColor = '#f5576c';
+
+        const result = await this.algorithms.detectCycle(async (node, state) => {
+            this.nodeColors.set(node, searchColor);
+            
+            const nodeData = this.graph.nodes.get(node);
+            if (nodeData) {
+                for (let i = 0; i < 4; i++) {
+                    this.createElectricParticle(nodeData.x, nodeData.y, searchColor);
+                }
+            }
+            
+            await delay();
+        });
+
+        this.resetVisualization();
+
+        if (result.hasCycle && result.cycle.length > 0) {
+            // Animate the cycle with lightning
+            for (let i = 0; i < result.cycle.length; i++) {
+                const node = result.cycle[i];
+                this.nodeColors.set(node, cycleColor);
+                this.electricNodes.add(node);
+
+                const nodeData = this.graph.nodes.get(node);
+                if (nodeData) {
+                    this.createShockwave(nodeData.x, nodeData.y, cycleColor);
+                    for (let j = 0; j < 6; j++) {
+                        this.createElectricParticle(nodeData.x, nodeData.y, cycleColor);
+                    }
+                }
+
+                if (i < result.cycle.length - 1) {
+                    const from = result.cycle[i];
+                    const to = result.cycle[i + 1];
+                    const fromData = this.graph.nodes.get(from);
+                    const toData = this.graph.nodes.get(to);
+                    
+                    if (fromData && toData) {
+                        this.createLightningBolt(fromData.x, fromData.y, toData.x, toData.y, cycleColor);
+                        this.electricEdges.add(`${from}-${to}`);
+                    }
+                    
+                    this.edgeColors.set(`${from}-${to}`, cycleColor);
+                    this.edgeColors.set(`${to}-${from}`, cycleColor);
+                    
+                    if (this.graph3DView && this.viewMode === '3d') {
+                        this.graph3DView.highlightEdge(from, to, 0xf5576c);
+                        this.graph3DView.highlightNode(node, 0xf5576c);
+                    }
+                }
+
+                await delay();
+            }
+
+            setTimeout(() => {
+                this.electricNodes.clear();
+                this.electricEdges.clear();
+            }, 500);
+
+            this.isAnimating = false;
+
+            // Remove duplicate closing node for display
+            const displayCycle = result.cycle.slice(0, -1);
+            const cycleHtml = result.cycle.map(n => `<span class="path-node" style="background:linear-gradient(135deg, #f5576c, #f093fb)">${n}</span>`).join('<span class="path-arrow">→</span>');
+
+            this.showResultModal(`
+                <h3>🔄 Siklus Ditemukan!</h3>
+                <p>Graf memiliki <strong>siklus</strong> dengan panjang <strong>${displayCycle.length}</strong> sisi.</p>
+                <div class="path-display">${cycleHtml}</div>
+                <p style="margin-top:16px;color:var(--text-muted);font-size:0.9rem">💡 Siklus adalah jalur tertutup yang dimulai dan berakhir di simpul yang sama tanpa mengulang sisi.</p>
+            `);
+        } else {
+            // No cycle - color all green
+            for (const id of this.graph.nodes.keys()) {
+                this.nodeColors.set(id, '#4A7C59');
+            }
+
+            this.isAnimating = false;
+
+            this.showResultModal(`
+                <h3>✅ Tidak Ada Siklus</h3>
+                <p>Graf ini <strong>tidak memiliki siklus</strong> (merupakan hutan/pohon).</p>
+                <p>Simpul: <strong>${this.graph.nodes.size}</strong> | Sisi: <strong>${this.graph.edges.length}</strong></p>
+                <p style="margin-top:12px;color:var(--text-muted);font-size:0.9rem">💡 Graf tanpa siklus disebut hutan. Jika terhubung, disebut pohon.</p>
+            `);
+        }
+    }
+
+    async runGirth() {
+        if (this.isAnimating) return;
+        if (this.graph.nodes.size === 0) {
+            this.showToast('Tidak ada simpul!', 'error');
+            return;
+        }
+        if (this.graph.edges.length === 0) {
+            this.showToast('Tidak ada sisi!', 'error');
+            return;
+        }
+
+        this.isAnimating = true;
+        this.resetVisualization();
+        this.electricNodes.clear();
+        this.electricEdges.clear();
+
+        const delay = () => new Promise(r => setTimeout(r, this.animationSpeed / 3));
+        const searchColor = '#C4A35A';
+        const girthColor = '#43e97b';
+
+        let processed = 0;
+        const result = await this.algorithms.getGirth(async (node, currentGirth) => {
+            processed++;
+            this.nodeColors.set(node, searchColor);
+            
+            const nodeData = this.graph.nodes.get(node);
+            if (nodeData) {
+                for (let i = 0; i < 3; i++) {
+                    this.createElectricParticle(nodeData.x, nodeData.y, searchColor);
+                }
+            }
+            
+            await delay();
+            
+            setTimeout(() => {
+                if (!this.electricNodes.has(node)) {
+                    this.nodeColors.delete(node);
+                }
+            }, 200);
+        });
+
+        this.resetVisualization();
+
+        if (result.girth === Infinity) {
+            for (const id of this.graph.nodes.keys()) {
+                this.nodeColors.set(id, '#4A7C59');
+            }
+
+            this.isAnimating = false;
+
+            this.showResultModal(`
+                <h3>⭕ Girth Tidak Terdefinisi</h3>
+                <p>Graf ini <strong>tidak memiliki siklus</strong>, sehingga girth = <strong>∞ (tak hingga)</strong>.</p>
+                <p style="margin-top:12px;color:var(--text-muted);font-size:0.9rem">💡 Girth adalah panjang siklus terpendek. Jika tidak ada siklus, girth tidak terdefinisi.</p>
+            `);
+        } else {
+            // Animate the girth cycle
+            for (let i = 0; i < result.cycle.length; i++) {
+                const node = result.cycle[i];
+                this.nodeColors.set(node, girthColor);
+                this.electricNodes.add(node);
+
+                const nodeData = this.graph.nodes.get(node);
+                if (nodeData) {
+                    this.createShockwave(nodeData.x, nodeData.y, girthColor);
+                    for (let j = 0; j < 6; j++) {
+                        this.createElectricParticle(nodeData.x, nodeData.y, girthColor);
+                    }
+                }
+
+                if (i < result.cycle.length - 1) {
+                    const from = result.cycle[i];
+                    const to = result.cycle[i + 1];
+                    const fromData = this.graph.nodes.get(from);
+                    const toData = this.graph.nodes.get(to);
+                    
+                    if (fromData && toData) {
+                        this.createLightningBolt(fromData.x, fromData.y, toData.x, toData.y, girthColor);
+                        this.electricEdges.add(`${from}-${to}`);
+                    }
+                    
+                    this.edgeColors.set(`${from}-${to}`, girthColor);
+                    this.edgeColors.set(`${to}-${from}`, girthColor);
+                    
+                    if (this.graph3DView && this.viewMode === '3d') {
+                        this.graph3DView.highlightEdge(from, to, 0x43e97b);
+                        this.graph3DView.highlightNode(node, 0x43e97b);
+                    }
+                }
+
+                await new Promise(r => setTimeout(r, this.animationSpeed));
+            }
+
+            setTimeout(() => {
+                this.electricNodes.clear();
+                this.electricEdges.clear();
+            }, 500);
+
+            this.isAnimating = false;
+
+            const displayCycle = result.cycle.slice(0, -1);
+            const cycleHtml = result.cycle.map(n => `<span class="path-node" style="background:linear-gradient(135deg, #43e97b, #38f9d7)">${n}</span>`).join('<span class="path-arrow">→</span>');
+
+            this.showResultModal(`
+                <h3>⭕ Girth (Sabuk) Graf</h3>
+                <p>Girth: <strong>${result.girth}</strong> sisi</p>
+                <p>Siklus terpendek yang ditemukan:</p>
+                <div class="path-display">${cycleHtml}</div>
+                <p style="margin-top:16px;color:var(--text-muted);font-size:0.9rem">💡 Girth adalah panjang siklus terpendek dalam graf. Siklus di atas memiliki ${displayCycle.length} simpul dan ${result.girth} sisi.</p>
+            `);
+        }
+    }
+
+    // ...existing code...
 }
 
 // Initialize
