@@ -713,7 +713,6 @@ public:
                     for (int neighbor : dirAdj[node]) {
                         if (neighbor == startNode && d + 1 < minGirth) {
                             minGirth = d + 1;
-                            // Rekonstruksi
                             bestCycle.clear();
                             bestCycle.push_back(startNode);
                             int cur = node;

@@ -463,9 +463,17 @@ body {
     background: white;
     border-radius: 10px;
     cursor: pointer;
-    font-size: 0.8rem;
+    font-size: 0.78rem;
     font-weight: 600;
     transition: all 0.3s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+.action-btn svg {
+    flex-shrink: 0;
 }
 
 .action-btn:hover {

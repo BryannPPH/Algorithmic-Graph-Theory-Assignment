@@ -470,9 +470,10 @@ class GraphVisualizer {
             this.showToast('Warna direset!', 'info');
         };
 
-        document.getElementById('exportGraph').onclick = () => this.exportGraph();
-        document.getElementById('importGraph').onclick = () => document.getElementById('fileInput').click();
-        document.getElementById('fileInput').onchange = (e) => this.importGraph(e);
+        // TXT import/export
+        document.getElementById('exportTxt').onclick = () => this.exportTXT();
+        document.getElementById('importTxt').onclick = () => document.getElementById('txtFileInput').click();
+        document.getElementById('txtFileInput').onchange = (e) => this.importTXT(e);
 
         // Speed slider
         document.getElementById('speedSlider').oninput = (e) => {
@@ -1411,52 +1412,6 @@ class GraphVisualizer {
         `);
     }
 
-    exportGraph() {
-        if (this.graph.nodes.size === 0) {
-            this.showToast('Graf kosong!', 'warning');
-            return;
-        }
-        const data = JSON.stringify(this.graph.toJSON(), null, 2);
-        const blob = new Blob([data], { type: 'application/json' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = `graph-${Date.now()}.json`;
-        a.click();
-        URL.revokeObjectURL(url);
-        this.showToast('Graf diekspor!', 'success');
-    }
-
-    importGraph(event) {
-        const file = event.target.files[0];
-        if (!file) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            try {
-                const data = JSON.parse(e.target.result);
-                this.graph.fromJSON(data);
-                this.resetVisualization();
-                this.updateStats();
-                this.update3DView();
-
-                if (this.graph.directed) {
-                    document.getElementById('directedBtn').classList.add('active');
-                    document.getElementById('undirectedBtn').classList.remove('active');
-                } else {
-                    document.getElementById('undirectedBtn').classList.add('active');
-                    document.getElementById('directedBtn').classList.remove('active');
-                }
-
-                this.showToast('Graf diimpor!', 'success');
-            } catch {
-                this.showToast('File tidak valid!', 'error');
-            }
-        };
-        reader.readAsText(file);
-        event.target.value = '';
-    }
-
     // ==================== TUGAS 3: NEW ALGORITHM RUNNERS ====================
 
     async runBipartite() {
@@ -1876,6 +1831,156 @@ class GraphVisualizer {
                 <p style="margin-top:16px;color:var(--text-muted);font-size:0.9rem">💡 Girth adalah panjang siklus terpendek dalam graf. Siklus di atas memiliki ${displayCycle.length} simpul dan ${result.girth} sisi.</p>
             `);
         }
+    }
+
+    // ==================== TXT IMPORT/EXPORT ====================
+
+    exportTXT() {
+        if (this.graph.nodes.size === 0) {
+            this.showToast('Graf kosong!', 'warning');
+            return;
+        }
+
+        const lines = [];
+
+        // Line 1: directed or undirected
+        lines.push(this.graph.directed ? 'directed' : 'undirected');
+
+        // Line 2: number of nodes
+        const nodes = Array.from(this.graph.nodes.entries());
+        lines.push(nodes.length.toString());
+
+        // Next lines: node data (id x y)
+        for (const [id, node] of nodes) {
+            lines.push(`${id} ${Math.round(node.x)} ${Math.round(node.y)}`);
+        }
+
+        // Next line: number of edges
+        lines.push(this.graph.edges.length.toString());
+
+        // Next lines: edge data (from to)
+        for (const edge of this.graph.edges) {
+            lines.push(`${edge.from} ${edge.to}`);
+        }
+
+        const text = lines.join('\n');
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `graph-${Date.now()}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+        this.showToast('Graf diekspor ke TXT!', 'success');
+    }
+
+    importTXT(event) {
+        const file = event.target.files[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const text = e.target.result.trim();
+                const lines = text.split(/\r?\n/).map(l => l.trim()).filter(l => l.length > 0);
+
+                let cursor = 0;
+
+                // Line 1: directed/undirected (optional — if not present, assume undirected)
+                let directed = false;
+                if (lines[cursor] === 'directed' || lines[cursor] === 'undirected') {
+                    directed = lines[cursor] === 'directed';
+                    cursor++;
+                }
+
+                // Number of nodes
+                const numNodes = parseInt(lines[cursor]);
+                if (isNaN(numNodes) || numNodes < 0) throw new Error('Jumlah node tidak valid');
+                cursor++;
+
+                // Clear current graph
+                this.graph.clear();
+                this.graph.setDirected(directed);
+                this.resetVisualization();
+
+                // Update UI toggle
+                document.getElementById('undirectedBtn').classList.toggle('active', !directed);
+                document.getElementById('directedBtn').classList.toggle('active', directed);
+
+                // Read nodes
+                const nodeIdMap = new Map(); // old id -> new id
+                const canvasW = this.canvas.width;
+                const canvasH = this.canvas.height;
+
+                for (let i = 0; i < numNodes; i++) {
+                    if (cursor >= lines.length) throw new Error(`Data node kurang, baru ${i} dari ${numNodes}`);
+
+                    const parts = lines[cursor].split(/\s+/);
+                    cursor++;
+
+                    if (parts.length >= 3) {
+                        // Format: id x y
+                        const oldId = parseInt(parts[0]);
+                        let x = parseFloat(parts[1]);
+                        let y = parseFloat(parts[2]);
+
+                        // Clamp to canvas
+                        x = Math.max(40, Math.min(canvasW - 40, x));
+                        y = Math.max(40, Math.min(canvasH - 40, y));
+
+                        const newId = this.graph.addNode(x, y);
+                        nodeIdMap.set(oldId, newId);
+                    } else if (parts.length >= 1) {
+                        // Format: id only — auto position
+                        const oldId = parseInt(parts[0]);
+                        const angle = (i / numNodes) * Math.PI * 2;
+                        const radius = Math.min(canvasW, canvasH) * 0.3;
+                        const x = canvasW / 2 + Math.cos(angle) * radius;
+                        const y = canvasH / 2 + Math.sin(angle) * radius;
+
+                        const newId = this.graph.addNode(x, y);
+                        nodeIdMap.set(oldId, newId);
+                    }
+                }
+
+                // Number of edges
+                if (cursor >= lines.length) throw new Error('Data jumlah sisi tidak ditemukan');
+                const numEdges = parseInt(lines[cursor]);
+                if (isNaN(numEdges) || numEdges < 0) throw new Error('Jumlah sisi tidak valid');
+                cursor++;
+
+                // Read edges
+                let edgesAdded = 0;
+                for (let i = 0; i < numEdges; i++) {
+                    if (cursor >= lines.length) throw new Error(`Data sisi kurang, baru ${i} dari ${numEdges}`);
+
+                    const parts = lines[cursor].split(/\s+/);
+                    cursor++;
+
+                    if (parts.length >= 2) {
+                        const fromOld = parseInt(parts[0]);
+                        const toOld = parseInt(parts[1]);
+                        const fromNew = nodeIdMap.get(fromOld);
+                        const toNew = nodeIdMap.get(toOld);
+
+                        if (fromNew !== undefined && toNew !== undefined) {
+                            if (this.graph.addEdge(fromNew, toNew)) {
+                                edgesAdded++;
+                            }
+                        }
+                    }
+                }
+
+                this.updateStats();
+                this.update3DView();
+                this.showToast(`Import berhasil! ${numNodes} simpul, ${edgesAdded} sisi`, 'success');
+            } catch (err) {
+                this.showToast(`Gagal import: ${err.message}`, 'error');
+                console.error('Import TXT error:', err);
+            }
+        };
+        reader.readAsText(file);
+        event.target.value = '';
     }
 
     // ...existing code...
