@@ -33,6 +33,30 @@ struct IslandResult {
     int largest;
 };
 
+struct BipartiteResult {
+    bool isBipartite;
+    vector<int> setA;
+    vector<int> setB;
+};
+
+struct DiameterResult {
+    int diameter;
+    int from;
+    int to;
+    vector<int> path;
+    bool disconnected;
+};
+
+struct CycleResult {
+    bool hasCycle;
+    vector<int> cycle;
+};
+
+struct GirthResult {
+    int girth;
+    vector<int> cycle;
+};
+
 class Graph {
 public:
     map<int, Node> nodes;
@@ -398,6 +422,319 @@ public:
         }
 
         return { islands, largest };
+    }
+
+    // Cek apakah graf bipartite menggunakan BFS 2-coloring
+    BipartiteResult isBipartite() const {
+        auto nodeList = getNodeIds();
+        if (nodeList.empty()) return { true, {}, {} };
+
+        map<int, int> color;
+        auto adj = graph.getUndirectedAdjacencyList();
+        bool bipartite = true;
+
+        for (int startNode : nodeList) {
+            if (color.count(startNode)) continue;
+
+            queue<int> q;
+            q.push(startNode);
+            color[startNode] = 0;
+
+            while (!q.empty() && bipartite) {
+                int node = q.front(); q.pop();
+                int c = color[node];
+
+                for (int neighbor : adj[node]) {
+                    if (!color.count(neighbor)) {
+                        color[neighbor] = 1 - c;
+                        q.push(neighbor);
+                    } else if (color[neighbor] == c) {
+                        bipartite = false;
+                        break;
+                    }
+                }
+            }
+
+            if (!bipartite) break;
+        }
+
+        BipartiteResult result;
+        result.isBipartite = bipartite;
+
+        if (bipartite) {
+            for (auto& [node, c] : color) {
+                if (c == 0) result.setA.push_back(node);
+                else result.setB.push_back(node);
+            }
+            sort(result.setA.begin(), result.setA.end());
+            sort(result.setB.begin(), result.setB.end());
+        }
+
+        return result;
+    }
+
+    DiameterResult getDiameter() const {
+        auto nodeList = getNodeIds();
+        if (nodeList.empty()) return { 0, -1, -1, {}, false };
+
+        auto adj = graph.getUndirectedAdjacencyList();
+        int maxDist = 0;
+        int diamFrom = -1, diamTo = -1;
+        vector<int> diamPath;
+
+        for (int startNode : nodeList) {
+            map<int, int> dist;
+            map<int, int> parent;
+            queue<int> q;
+
+            dist[startNode] = 0;
+            parent[startNode] = -1;
+            q.push(startNode);
+
+            while (!q.empty()) {
+                int node = q.front(); q.pop();
+                for (int neighbor : adj[node]) {
+                    if (!dist.count(neighbor)) {
+                        dist[neighbor] = dist[node] + 1;
+                        parent[neighbor] = node;
+                        q.push(neighbor);
+                    }
+                }
+            }
+
+            for (auto& [node, d] : dist) {
+                if (d > maxDist) {
+                    maxDist = d;
+                    diamFrom = startNode;
+                    diamTo = node;
+                    diamPath.clear();
+                    int cur = node;
+                    while (cur != -1) {
+                        diamPath.push_back(cur);
+                        cur = parent[cur];
+                    }
+                    reverse(diamPath.begin(), diamPath.end());
+                }
+            }
+        }
+
+        if (!isConnected()) {
+            return { -1, -1, -1, {}, true };
+        }
+
+        return { maxDist, diamFrom, diamTo, diamPath, false };
+    }
+
+    // Deteksi siklus menggunakan DFS
+    CycleResult detectCycle() const {
+        auto nodeList = getNodeIds();
+        if (nodeList.empty()) return { false, {} };
+
+        auto adj = graph.getAdjacencyList();
+        vector<int> cycleNodes;
+        bool found = false;
+
+        if (graph.directed) {
+            // Directed: gunakan warna (WHITE=0, GRAY=1, BLACK=2)
+            map<int, int> state;
+            map<int, int> predecessor;
+
+            for (int node : nodeList) state[node] = 0;
+
+            function<void(int)> dfs = [&](int node) {
+                if (found) return;
+                state[node] = 1; // GRAY
+
+                for (int neighbor : adj[node]) {
+                    if (found) return;
+                    if (state[neighbor] == 1) {
+                        // Back edge → siklus!
+                        found = true;
+                        cycleNodes.push_back(neighbor);
+                        int cur = node;
+                        while (cur != neighbor) {
+                            cycleNodes.push_back(cur);
+                            cur = predecessor[cur];
+                        }
+                        cycleNodes.push_back(neighbor);
+                        reverse(cycleNodes.begin(), cycleNodes.end());
+                        return;
+                    }
+                    if (state[neighbor] == 0) {
+                        predecessor[neighbor] = node;
+                        dfs(neighbor);
+                    }
+                }
+
+                state[node] = 2;
+            };
+
+            for (int node : nodeList) {
+                if (state[node] == 0 && !found) {
+                    dfs(node);
+                }
+            }
+        } else {
+            set<int> visited;
+            map<int, int> parent;
+
+            function<void(int, int)> dfs = [&](int node, int par) {
+                if (found) return;
+                visited.insert(node);
+                parent[node] = par;
+
+                for (int neighbor : adj[node]) {
+                    if (found) return;
+                    if (!visited.count(neighbor)) {
+                        dfs(neighbor, node);
+                    } else if (neighbor != par) {
+                        found = true;
+                        cycleNodes.push_back(neighbor);
+                        int cur = node;
+                        while (cur != neighbor) {
+                            cycleNodes.push_back(cur);
+                            cur = parent[cur];
+                        }
+                        cycleNodes.push_back(neighbor);
+                        reverse(cycleNodes.begin(), cycleNodes.end());
+                        return;
+                    }
+                }
+            };
+
+            for (int node : nodeList) {
+                if (!visited.count(node) && !found) {
+                    dfs(node, -1);
+                }
+            }
+        }
+
+        return { found, cycleNodes };
+    }
+
+    // Cari girth (siklus terpendek) menggunakan BFS dari setiap simpul
+    GirthResult getGirth() const {
+        auto nodeList = getNodeIds();
+        if (nodeList.empty()) return { INT_MAX, {} };
+
+        int minGirth = INT_MAX;
+        vector<int> bestCycle;
+
+        if (!graph.directed) {
+            auto adj = graph.getUndirectedAdjacencyList();
+
+            for (int startNode : nodeList) {
+                map<int, int> dist;
+                map<int, int> parentMap;
+                queue<int> q;
+
+                dist[startNode] = 0;
+                parentMap[startNode] = -1;
+                q.push(startNode);
+
+                bool foundCycle = false;
+
+                while (!q.empty() && !foundCycle) {
+                    int node = q.front(); q.pop();
+                    int d = dist[node];
+
+                    for (int neighbor : adj[node]) {
+                        if (!dist.count(neighbor)) {
+                            dist[neighbor] = d + 1;
+                            parentMap[neighbor] = node;
+                            q.push(neighbor);
+                        } else if (parentMap[node] != neighbor) {
+                            int cycleLen = d + dist[neighbor] + 1;
+                            if (cycleLen < minGirth) {
+                                minGirth = cycleLen;
+
+                                vector<int> pathA;
+                                int cur = node;
+                                while (cur != -1) {
+                                    pathA.push_back(cur);
+                                    cur = parentMap[cur];
+                                }
+                                vector<int> pathB;
+                                cur = neighbor;
+                                while (cur != -1) {
+                                    pathB.push_back(cur);
+                                    cur = parentMap[cur];
+                                }
+
+                                set<int> setA(pathA.begin(), pathA.end());
+                                int lca = -1;
+                                for (int n : pathB) {
+                                    if (setA.count(n)) { lca = n; break; }
+                                }
+
+                                if (lca != -1) {
+                                    vector<int> cyclePartA;
+                                    for (int n : pathA) {
+                                        cyclePartA.push_back(n);
+                                        if (n == lca) break;
+                                    }
+                                    vector<int> cyclePartB;
+                                    for (int n : pathB) {
+                                        if (n == lca) break;
+                                        cyclePartB.push_back(n);
+                                    }
+                                    reverse(cyclePartB.begin(), cyclePartB.end());
+
+                                    bestCycle.clear();
+                                    for (int n : cyclePartA) bestCycle.push_back(n);
+                                    for (int n : cyclePartB) bestCycle.push_back(n);
+                                    bestCycle.push_back(cyclePartA[0]);
+                                }
+                            }
+                            foundCycle = true;
+                            break;
+                        }
+                    }
+                }
+            }
+        } else {
+            auto dirAdj = graph.getAdjacencyList();
+
+            for (int startNode : nodeList) {
+                map<int, int> dist;
+                map<int, int> parentMap;
+                queue<int> q;
+
+                dist[startNode] = 0;
+                parentMap[startNode] = -1;
+                q.push(startNode);
+
+                while (!q.empty()) {
+                    int node = q.front(); q.pop();
+                    int d = dist[node];
+
+                    if (d >= minGirth) break;
+
+                    for (int neighbor : dirAdj[node]) {
+                        if (neighbor == startNode && d + 1 < minGirth) {
+                            minGirth = d + 1;
+                            // Rekonstruksi
+                            bestCycle.clear();
+                            bestCycle.push_back(startNode);
+                            int cur = node;
+                            while (cur != startNode && cur != -1) {
+                                bestCycle.push_back(cur);
+                                cur = parentMap[cur];
+                            }
+                            reverse(bestCycle.begin(), bestCycle.end());
+                            bestCycle.push_back(startNode);
+                        }
+                        if (!dist.count(neighbor)) {
+                            dist[neighbor] = d + 1;
+                            parentMap[neighbor] = node;
+                            q.push(neighbor);
+                        }
+                    }
+                }
+            }
+        }
+
+        return { minGirth, bestCycle };
     }
 
 private:

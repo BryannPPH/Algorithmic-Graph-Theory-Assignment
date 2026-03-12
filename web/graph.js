@@ -413,8 +413,6 @@ class GraphAlgorithms {
         return { size: largest.length, nodes: largest.sort((a, b) => a - b) };
     }
 
-    // ==================== TUGAS 3: NEW ALGORITHMS ====================
-
     // Check if graph is bipartite using BFS 2-coloring
     async isBipartite(onVisit) {
         const nodes = Array.from(this.graph.nodes.keys());
@@ -534,8 +532,7 @@ class GraphAlgorithms {
         let found = false;
 
         if (this.graph.directed) {
-            // Directed: use colors (WHITE=0, GRAY=1, BLACK=2)
-            const state = new Map(); // 0=white, 1=gray, 2=black
+            const state = new Map(); 
             const predecessor = new Map();
 
             for (const node of nodes) state.set(node, 0);
@@ -549,7 +546,6 @@ class GraphAlgorithms {
                 for (const neighbor of neighbors) {
                     if (found) return;
                     if (state.get(neighbor) === 1) {
-                        // Back edge found → cycle!
                         found = true;
                         cycleNodes = [neighbor];
                         let cur = node;
@@ -567,7 +563,7 @@ class GraphAlgorithms {
                     }
                 }
 
-                state.set(node, 2); // BLACK
+                state.set(node, 2);
             };
 
             for (const node of nodes) {
@@ -576,7 +572,6 @@ class GraphAlgorithms {
                 }
             }
         } else {
-            // Undirected: track parent to avoid trivial back edge
             const dfs = async (node, par) => {
                 if (found) return;
                 visited.add(node);
@@ -624,7 +619,6 @@ class GraphAlgorithms {
         let bestCycle = [];
 
         for (const startNode of nodes) {
-            // BFS from startNode, track distances and parents
             const dist = new Map();
             const parentMap = new Map();
             const queue = [startNode];
@@ -690,14 +684,12 @@ class GraphAlgorithms {
             if (onProgress) await onProgress(startNode, minGirth);
         }
 
-        // For directed graphs, use a different approach
         if (this.graph.directed) {
             const dirAdj = this.graph.getAdjacencyList();
             minGirth = Infinity;
             bestCycle = [];
 
             for (const startNode of nodes) {
-                // BFS in directed graph
                 const dist = new Map();
                 const parentMap = new Map();
                 const queue = [startNode];
@@ -714,7 +706,6 @@ class GraphAlgorithms {
                     for (const neighbor of neighbors) {
                         if (neighbor === startNode && d + 1 < minGirth) {
                             minGirth = d + 1;
-                            // Reconstruct
                             bestCycle = [startNode];
                             let cur = node;
                             while (cur !== startNode && cur !== null) {

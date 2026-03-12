@@ -32,7 +32,6 @@ body {
     overflow: hidden;
 }
 
-/* ==================== TOP NAVIGATION ==================== */
 .top-nav {
     display: flex;
     align-items: center;
@@ -149,13 +148,11 @@ body {
     border-color: rgba(148, 163, 184, 0.5);
 }
 
-/* ==================== APP CONTAINER ==================== */
 .app-container {
     display: flex;
     height: calc(100vh - 70px);
 }
 
-/* ==================== SIDEBAR ==================== */
 .sidebar {
     width: 300px;
     background: linear-gradient(180deg, var(--bg-secondary) 0%, var(--bg-tertiary) 100%);
@@ -418,7 +415,6 @@ body {
     border-color: #64B5F6;
 }
 
-/* Operation Badge */
 .op-badge {
     position: absolute;
     right: 12px;
