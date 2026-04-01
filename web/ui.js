@@ -231,6 +231,45 @@ class GraphVisualizer {
         );
     }
 
+    formatWeight(weight) {
+        const numericWeight = Number(weight);
+        if (!Number.isFinite(numericWeight)) return '1';
+        if (Number.isInteger(numericWeight)) return numericWeight.toString();
+        return numericWeight.toFixed(2).replace(/\.?0+$/, '');
+    }
+
+    parseWeight(value) {
+        const normalized = String(value ?? '').replace(',', '.').trim();
+        if (!normalized) return null;
+
+        const numericWeight = Number(normalized);
+        if (!Number.isFinite(numericWeight) || numericWeight < 0) {
+            return null;
+        }
+
+        return numericWeight;
+    }
+
+    shouldShowEdgeWeights() {
+        return this.graph.edges.some(edge => this.graph.normalizeWeight(edge.weight) !== 1);
+    }
+
+    drawRoundedRect(ctx, x, y, width, height, radius) {
+        const safeRadius = Math.min(radius, width / 2, height / 2);
+
+        ctx.beginPath();
+        ctx.moveTo(x + safeRadius, y);
+        ctx.lineTo(x + width - safeRadius, y);
+        ctx.quadraticCurveTo(x + width, y, x + width, y + safeRadius);
+        ctx.lineTo(x + width, y + height - safeRadius);
+        ctx.quadraticCurveTo(x + width, y + height, x + width - safeRadius, y + height);
+        ctx.lineTo(x + safeRadius, y + height);
+        ctx.quadraticCurveTo(x, y + height, x, y + height - safeRadius);
+        ctx.lineTo(x, y + safeRadius);
+        ctx.quadraticCurveTo(x, y, x + safeRadius, y);
+        ctx.closePath();
+    }
+
     // ==================== EXISTING METHODS ====================
     resizeCanvas() {
         const rect = this.canvasContainer.getBoundingClientRect();
@@ -361,12 +400,16 @@ class GraphVisualizer {
         const pos = this.getPos(e);
 
         if (this.edgeStartNode !== null) {
+            const startNodeId = this.edgeStartNode;
             const endNodeId = this.graph.getNodeAtPosition(pos.x, pos.y, this.nodeRadius);
-            if (endNodeId && endNodeId !== this.edgeStartNode && !this.graph.hasEdge(this.edgeStartNode, endNodeId)) {
-                this.graph.addEdge(this.edgeStartNode, endNodeId);
-                this.showToast(`Sisi ${this.edgeStartNode}-${endNodeId} ditambahkan!`, 'success');
-                this.updateStats();
-                this.update3DView();
+            if (endNodeId && endNodeId !== startNodeId && !this.graph.hasEdge(startNodeId, endNodeId)) {
+                this.showEdgeWeightModal(startNodeId, endNodeId, (weight) => {
+                    if (this.graph.addEdge(startNodeId, endNodeId, weight)) {
+                        this.showToast(`Sisi ${startNodeId}-${endNodeId} ditambahkan (bobot ${this.formatWeight(weight)})!`, 'success');
+                        this.updateStats();
+                        this.update3DView();
+                    }
+                });
             }
             this.edgeStartNode = null;
             this.tempEdgeEnd = null;
@@ -448,6 +491,8 @@ class GraphVisualizer {
         document.getElementById('opDiameter').onclick = () => this.runDiameter();
         document.getElementById('opCycle').onclick = () => this.runDetectCycle();
         document.getElementById('opGirth').onclick = () => this.runGirth();
+        document.getElementById('opShortestPath').onclick = () => this.selectTwoNodesAndRun('Lintasan Terpendek', this.runShortestPath.bind(this));
+        document.getElementById('opMST').onclick = () => this.runMinimumSpanningTree();
 
         // Actions
         document.getElementById('clearGraph').onclick = () => {
@@ -941,6 +986,34 @@ class GraphVisualizer {
             ctx.fillStyle = color;
             ctx.fill();
         }
+
+        if (this.shouldShowEdgeWeights()) {
+            const weight = this.graph.normalizeWeight(edge.weight);
+            const label = this.formatWeight(weight);
+            const midX = (startX + endX) / 2;
+            const midY = (startY + endY) / 2;
+            const labelX = midX - Math.sin(angle) * 18;
+            const labelY = midY + Math.cos(angle) * 18;
+
+            ctx.save();
+            ctx.font = '600 12px Inter, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+
+            const labelWidth = ctx.measureText(label).width + 16;
+            const labelHeight = 24;
+
+            this.drawRoundedRect(ctx, labelX - labelWidth / 2, labelY - labelHeight / 2, labelWidth, labelHeight, 8);
+            ctx.fillStyle = isElectric ? 'rgba(255, 255, 255, 0.96)' : 'rgba(250, 248, 245, 0.95)';
+            ctx.fill();
+            ctx.strokeStyle = isElectric ? electricColor : '#C4A35A';
+            ctx.lineWidth = 1.5;
+            ctx.stroke();
+
+            ctx.fillStyle = isElectric ? electricColor : '#5C5651';
+            ctx.fillText(label, labelX, labelY + 0.5);
+            ctx.restore();
+        }
     }
 
     // ==================== MODALS ====================
@@ -951,6 +1024,51 @@ class GraphVisualizer {
 
     hideResultModal() {
         document.getElementById('resultModal').classList.remove('show');
+    }
+
+    showEdgeWeightModal(fromNode, toNode, callback) {
+        const directionLabel = this.graph.directed ? `${fromNode} -> ${toNode}` : `${fromNode} - ${toNode}`;
+        document.getElementById('nodeSelectTitle').textContent = 'Bobot Sisi';
+        document.getElementById('nodeSelectBody').innerHTML = `
+            <div class="node-select-group">
+                <label>Masukkan bobot untuk sisi <strong>${directionLabel}</strong>:</label>
+                <div class="edge-weight-panel">
+                    <input id="edgeWeightInput" class="edge-weight-input" type="number" min="0" step="0.1" value="1">
+                    <p class="edge-weight-hint">Gunakan bobot >= 0. Nilai default adalah 1.</p>
+                </div>
+            </div>
+        `;
+        document.getElementById('nodeSelectModal').classList.add('show');
+
+        const input = document.getElementById('edgeWeightInput');
+        if (input) {
+            setTimeout(() => {
+                input.focus();
+                input.select();
+            }, 0);
+        }
+
+        const confirmWeight = () => {
+            const weight = this.parseWeight(input ? input.value : 1);
+            if (weight === null) {
+                this.showToast('Bobot sisi harus berupa angka >= 0', 'warning');
+                if (input) input.focus();
+                return;
+            }
+
+            this.hideNodeSelectModal();
+            callback(weight);
+        };
+
+        document.getElementById('confirmNodeSelect').onclick = confirmWeight;
+        if (input) {
+            input.onkeydown = (event) => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    confirmWeight();
+                }
+            };
+        }
     }
 
     showNodeSelectModal(title, isTwoNode = false) {
@@ -1318,6 +1436,110 @@ class GraphVisualizer {
                 <div class="path-display">${pathHtml}</div>
             `);
         }
+    }
+
+    async runShortestPath(startNode, endNode) {
+        if (this.isAnimating) return;
+        this.isAnimating = true;
+        this.resetVisualization();
+        this.electricNodes.clear();
+        this.electricEdges.clear();
+
+        const delay = () => new Promise(resolve => setTimeout(resolve, this.animationSpeed));
+        const searchColor = '#C4A35A';
+        const pathColor = '#43e97b';
+
+        this.nodeColors.set(startNode, '#4A7C59');
+        this.nodeColors.set(endNode, '#9E4A4A');
+        this.electricNodes.add(startNode);
+        this.electricNodes.add(endNode);
+
+        const startData = this.graph.nodes.get(startNode);
+        const endData = this.graph.nodes.get(endNode);
+        if (startData) this.createShockwave(startData.x, startData.y, '#4A7C59');
+        if (endData) this.createShockwave(endData.x, endData.y, '#9E4A4A');
+
+        await delay();
+
+        const result = await this.algorithms.shortestPathWeighted(startNode, endNode, async (node) => {
+            if (node !== startNode && node !== endNode) {
+                this.nodeColors.set(node, searchColor);
+                const nodeData = this.graph.nodes.get(node);
+                if (nodeData) {
+                    for (let i = 0; i < 4; i++) {
+                        this.createElectricParticle(nodeData.x, nodeData.y, searchColor);
+                    }
+                }
+            }
+
+            if (this.graph3DView && this.viewMode === '3d') {
+                this.graph3DView.highlightNode(node, node === startNode ? 0x4A7C59 : (node === endNode ? 0x9E4A4A : 0xC4A35A));
+            }
+
+            await delay();
+        });
+
+        if (result.distance !== Infinity) {
+            for (let i = 0; i < result.path.length - 1; i++) {
+                const from = result.path[i];
+                const to = result.path[i + 1];
+                const fromDataNode = this.graph.nodes.get(from);
+                const toDataNode = this.graph.nodes.get(to);
+
+                if (fromDataNode && toDataNode) {
+                    this.createLightningBolt(fromDataNode.x, fromDataNode.y, toDataNode.x, toDataNode.y, pathColor);
+                    this.electricEdges.add(`${from}-${to}`);
+                }
+
+                this.edgeColors.set(`${from}-${to}`, pathColor);
+                this.edgeColors.set(`${to}-${from}`, pathColor);
+                this.nodeColors.set(to, pathColor);
+                this.electricNodes.add(to);
+
+                if (this.graph3DView && this.viewMode === '3d') {
+                    this.graph3DView.highlightEdge(from, to, 0x43e97b);
+                    this.graph3DView.highlightNode(to, 0x43e97b);
+                }
+
+                await delay();
+            }
+
+            this.nodeColors.set(startNode, '#4A7C59');
+            this.nodeColors.set(endNode, '#9E4A4A');
+        }
+
+        setTimeout(() => {
+            this.electricNodes.clear();
+            this.electricEdges.clear();
+        }, 500);
+
+        this.isAnimating = false;
+
+        if (result.distance === Infinity) {
+            this.showResultModal(`
+                <h3>Lintasan Terpendek Tidak Ditemukan</h3>
+                <p>Tidak ada lintasan dari simpul <strong>${startNode}</strong> ke simpul <strong>${endNode}</strong>.</p>
+            `);
+            return;
+        }
+
+        const pathHtml = result.path.map(node => `<span class="path-node">${node}</span>`).join('<span class="path-arrow">-></span>');
+        const edgeDetails = [];
+        const edgeSymbol = this.graph.directed ? '->' : '-';
+        for (let i = 0; i < result.path.length - 1; i++) {
+            const from = result.path[i];
+            const to = result.path[i + 1];
+            edgeDetails.push(`<p><span class="color-dot" style="background:#43e97b"></span>${from} ${edgeSymbol} ${to} (bobot ${this.formatWeight(this.graph.getEdgeWeight(from, to))})</p>`);
+        }
+
+        this.showResultModal(`
+            <h3>Lintasan Terpendek</h3>
+            <p>Dari simpul <strong>${startNode}</strong> ke simpul <strong>${endNode}</strong></p>
+            <p>Total bobot minimum: <strong>${this.formatWeight(result.distance)}</strong></p>
+            <p>Jumlah sisi pada lintasan: <strong>${Math.max(0, result.path.length - 1)}</strong></p>
+            <div class="path-display">${pathHtml}</div>
+            <div class="component-list">${edgeDetails.join('')}</div>
+        `);
     }
 
     runConnected() {
@@ -1833,6 +2055,86 @@ class GraphVisualizer {
         }
     }
 
+    async runMinimumSpanningTree() {
+        if (this.isAnimating) return;
+        if (this.graph.nodes.size === 0) {
+            this.showToast('Tidak ada simpul!', 'error');
+            return;
+        }
+        if (this.graph.directed) {
+            this.showResultModal(`
+                <h3>Pohon Pembangun Minimal Tidak Tersedia</h3>
+                <p>Fitur ini hanya berlaku untuk <strong>graf undirected</strong>.</p>
+                <p>Ubah tipe graf ke undirected untuk menghitung pohon pembangun minimal.</p>
+            `);
+            return;
+        }
+
+        this.isAnimating = true;
+        this.resetVisualization();
+        this.electricNodes.clear();
+        this.electricEdges.clear();
+
+        const result = this.algorithms.getMinimumSpanningTree();
+        const mstColor = '#43e97b';
+        const delay = () => new Promise(resolve => setTimeout(resolve, this.animationSpeed));
+
+        for (const edge of result.edges) {
+            const fromNode = this.graph.nodes.get(edge.from);
+            const toNode = this.graph.nodes.get(edge.to);
+
+            this.edgeColors.set(`${edge.from}-${edge.to}`, mstColor);
+            this.edgeColors.set(`${edge.to}-${edge.from}`, mstColor);
+            this.nodeColors.set(edge.from, mstColor);
+            this.nodeColors.set(edge.to, mstColor);
+            this.electricEdges.add(`${edge.from}-${edge.to}`);
+            this.electricNodes.add(edge.from);
+            this.electricNodes.add(edge.to);
+
+            if (fromNode && toNode) {
+                this.createLightningBolt(fromNode.x, fromNode.y, toNode.x, toNode.y, mstColor);
+                this.createShockwave(fromNode.x, fromNode.y, mstColor);
+                this.createShockwave(toNode.x, toNode.y, mstColor);
+            }
+
+            if (this.graph3DView && this.viewMode === '3d') {
+                this.graph3DView.highlightEdge(edge.from, edge.to, 0x43e97b);
+                this.graph3DView.highlightNode(edge.from, 0x43e97b);
+                this.graph3DView.highlightNode(edge.to, 0x43e97b);
+            }
+
+            await delay();
+        }
+
+        setTimeout(() => {
+            this.electricNodes.clear();
+            this.electricEdges.clear();
+        }, 500);
+
+        this.isAnimating = false;
+
+        const edgeDetails = result.edges.map(edge =>
+            `<p><span class="color-dot" style="background:#43e97b"></span>${edge.from} - ${edge.to} (bobot ${this.formatWeight(edge.weight)})</p>`
+        ).join('');
+
+        if (result.disconnected) {
+            this.showResultModal(`
+                <h3>Graf Tidak Terhubung</h3>
+                <p>Graf ini tidak memiliki satu <strong>pohon pembangun minimal</strong> karena terdiri dari <strong>${result.componentCount}</strong> komponen.</p>
+                <p>Yang ditampilkan adalah <strong>minimum spanning forest</strong> dengan total bobot <strong>${this.formatWeight(result.totalWeight)}</strong>.</p>
+                <div class="component-list">${edgeDetails || '<p>Tidak ada sisi yang dapat dipilih.</p>'}</div>
+            `);
+            return;
+        }
+
+        this.showResultModal(`
+            <h3>Pohon Pembangun Minimal</h3>
+            <p>Total bobot minimum: <strong>${this.formatWeight(result.totalWeight)}</strong></p>
+            <p>Jumlah sisi terpilih: <strong>${result.edges.length}</strong></p>
+            <div class="component-list">${edgeDetails || '<p>Graf hanya memiliki satu simpul, sehingga MST tidak memerlukan sisi.</p>'}</div>
+        `);
+    }
+
     // ==================== TXT IMPORT/EXPORT ====================
 
     exportTXT() {
@@ -1858,9 +2160,12 @@ class GraphVisualizer {
         // Next line: number of edges
         lines.push(this.graph.edges.length.toString());
 
+        const hasCustomWeights = this.shouldShowEdgeWeights();
+
         // Next lines: edge data (from to)
         for (const edge of this.graph.edges) {
-            lines.push(`${edge.from} ${edge.to}`);
+            const weight = this.formatWeight(this.graph.normalizeWeight(edge.weight));
+            lines.push(hasCustomWeights ? `${edge.from} ${edge.to} ${weight}` : `${edge.from} ${edge.to}`);
         }
 
         const text = lines.join('\n');
@@ -1960,11 +2265,13 @@ class GraphVisualizer {
                     if (parts.length >= 2) {
                         const fromOld = parseInt(parts[0]);
                         const toOld = parseInt(parts[1]);
+                        const weight = parts.length >= 3 ? this.parseWeight(parts[2]) : 1;
+                        if (weight === null) throw new Error(`Bobot sisi tidak valid pada baris: ${lines[cursor - 1]}`);
                         const fromNew = nodeIdMap.get(fromOld);
                         const toNew = nodeIdMap.get(toOld);
 
                         if (fromNew !== undefined && toNew !== undefined) {
-                            if (this.graph.addEdge(fromNew, toNew)) {
+                            if (this.graph.addEdge(fromNew, toNew, weight)) {
                                 edgesAdded++;
                             }
                         }

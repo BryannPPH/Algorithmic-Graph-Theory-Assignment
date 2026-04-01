@@ -1021,6 +1021,8 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
+    padding: 24px;
+    overflow-y: auto;
     z-index: 1000;
     opacity: 0;
     visibility: hidden;
@@ -1177,12 +1179,46 @@ body {
     opacity: 1;
 }
 
+.edge-weight-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.edge-weight-input {
+    width: 100%;
+    padding: 14px 16px;
+    border: 2px solid var(--border);
+    border-radius: 14px;
+    background: linear-gradient(180deg, white 0%, var(--bg-secondary) 100%);
+    color: var(--text-primary);
+    font: inherit;
+    font-weight: 600;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+}
+
+.edge-weight-input:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 4px rgba(139, 115, 85, 0.15);
+    transform: translateY(-1px);
+}
+
+.edge-weight-hint {
+    color: var(--text-muted);
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
 /* Result Modal - AESTHETIC & KEREN */
 .result-modal {
     background: white;
     border-radius: 28px;
     max-width: 500px;
     width: 95%;
+    max-height: calc(100vh - 48px);
+    display: flex;
+    flex-direction: column;
     box-shadow: 
         0 30px 100px rgba(0,0,0,0.35),
         0 0 0 1px rgba(255,255,255,0.2);
@@ -1223,6 +1259,7 @@ body {
     color: var(--text-muted);
     top: 20px;
     right: 20px;
+    z-index: 2;
 }
 
 .result-modal .modal-close-btn:hover {
@@ -1232,6 +1269,10 @@ body {
 
 .result-modal-content {
     padding: 40px;
+    padding-top: 76px;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
 }
 
 .result-modal-content h3 {
@@ -1898,6 +1939,7 @@ body.dark-mode .op-btn,
 body.dark-mode .action-btn,
 body.dark-mode .info-item,
 body.dark-mode .node-btn,
+body.dark-mode .edge-weight-input,
 body.dark-mode .result-modal,
 body.dark-mode .modal {
     background: linear-gradient(180deg, #1f2937 0%, #17202c 100%);
@@ -1930,6 +1972,10 @@ body.dark-mode .view-3d-info-inline {
 }
 
 body.dark-mode .view-3d-info-inline p {
+    color: var(--text-secondary);
+}
+
+body.dark-mode .edge-weight-hint {
     color: var(--text-secondary);
 }
 

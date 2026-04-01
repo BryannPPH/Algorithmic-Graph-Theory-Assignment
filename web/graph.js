@@ -33,9 +33,15 @@ class Graph {
         return true;
     }
 
-    addEdge(from, to) {
+    normalizeWeight(weight = 1) {
+        const numericWeight = Number(weight);
+        return Number.isFinite(numericWeight) && numericWeight >= 0 ? numericWeight : 1;
+    }
+
+    addEdge(from, to, weight = 1) {
         if (!this.nodes.has(from) || !this.nodes.has(to)) return false;
         if (from === to) return false;
+        const normalizedWeight = this.normalizeWeight(weight);
         
         // Check if edge already exists
         const exists = this.edges.some(e => {
@@ -48,7 +54,7 @@ class Graph {
      
         if (exists) return false;
         
-        this.edges.push({ from, to });
+        this.edges.push({ from, to, weight: normalizedWeight });
         return true;
     }
 
@@ -107,6 +113,24 @@ class Graph {
         return adj;
     }
 
+    getWeightedAdjacencyList() {
+        const adj = new Map();
+
+        for (const nodeId of this.nodes.keys()) {
+            adj.set(nodeId, []);
+        }
+
+        for (const edge of this.edges) {
+            const weight = this.normalizeWeight(edge.weight);
+            adj.get(edge.from).push({ node: edge.to, weight });
+            if (!this.directed) {
+                adj.get(edge.to).push({ node: edge.from, weight });
+            }
+        }
+
+        return adj;
+    }
+
     getNeighbors(nodeId) {
         if (!this.nodes.has(nodeId)) return [];
 
@@ -120,6 +144,20 @@ class Graph {
         }
 
         return neighbors;
+    }
+
+    getEdge(from, to) {
+        return this.edges.find(e => {
+            if (this.directed) {
+                return e.from === from && e.to === to;
+            }
+            return (e.from === from && e.to === to) || (e.from === to && e.to === from);
+        }) || null;
+    }
+
+    getEdgeWeight(from, to) {
+        const edge = this.getEdge(from, to);
+        return edge ? this.normalizeWeight(edge.weight) : null;
     }
 
     clear() {
@@ -194,7 +232,10 @@ class Graph {
 
     fromJSON(data) {
         this.nodes = new Map(data.nodes);
-        this.edges = data.edges;
+        this.edges = (data.edges || []).map(edge => ({
+            ...edge,
+            weight: this.normalizeWeight(edge.weight)
+        }));
         this.directed = data.directed;
         this.nextNodeId = data.nextNodeId;
     }
@@ -297,6 +338,74 @@ class GraphAlgorithms {
         }
 
         return { distance: -1, path: [] };
+    }
+
+    // Weighted shortest path using Dijkstra
+    async shortestPathWeighted(startNode, endNode, onVisit) {
+        const nodes = Array.from(this.graph.nodes.keys());
+        if (!this.graph.nodes.has(startNode) || !this.graph.nodes.has(endNode)) {
+            return { distance: Infinity, path: [] };
+        }
+
+        const adj = this.graph.getWeightedAdjacencyList();
+        const dist = new Map();
+        const parent = new Map();
+        const visited = new Set();
+
+        for (const node of nodes) {
+            dist.set(node, Infinity);
+            parent.set(node, null);
+        }
+        dist.set(startNode, 0);
+
+        while (visited.size < nodes.length) {
+            let current = null;
+            let currentDist = Infinity;
+
+            for (const node of nodes) {
+                const candidateDist = dist.get(node);
+                if (!visited.has(node) && candidateDist < currentDist) {
+                    current = node;
+                    currentDist = candidateDist;
+                }
+            }
+
+            if (current === null || currentDist === Infinity) {
+                break;
+            }
+
+            visited.add(current);
+
+            if (onVisit) await onVisit(current, currentDist);
+
+            if (current === endNode) {
+                break;
+            }
+
+            const neighbors = adj.get(current) || [];
+            for (const { node: neighbor, weight } of neighbors) {
+                if (visited.has(neighbor)) continue;
+
+                const newDist = currentDist + weight;
+                if (newDist < dist.get(neighbor)) {
+                    dist.set(neighbor, newDist);
+                    parent.set(neighbor, current);
+                }
+            }
+        }
+
+        if (dist.get(endNode) === Infinity) {
+            return { distance: Infinity, path: [] };
+        }
+
+        const path = [];
+        let current = endNode;
+        while (current !== null) {
+            path.unshift(current);
+            current = parent.get(current);
+        }
+
+        return { distance: dist.get(endNode), path };
     }
 
     // Check if graph is connected
@@ -411,6 +520,97 @@ class GraphAlgorithms {
         }
 
         return { size: largest.length, nodes: largest.sort((a, b) => a - b) };
+    }
+
+    // Minimum spanning tree / forest using Kruskal
+    getMinimumSpanningTree() {
+        const nodes = Array.from(this.graph.nodes.keys()).sort((a, b) => a - b);
+        if (this.graph.directed) {
+            return {
+                directed: true,
+                disconnected: false,
+                componentCount: 0,
+                totalWeight: 0,
+                edges: []
+            };
+        }
+
+        if (nodes.length === 0) {
+            return {
+                directed: false,
+                disconnected: false,
+                componentCount: 0,
+                totalWeight: 0,
+                edges: []
+            };
+        }
+
+        const parent = new Map();
+        const rank = new Map();
+
+        const find = (node) => {
+            if (parent.get(node) !== node) {
+                parent.set(node, find(parent.get(node)));
+            }
+            return parent.get(node);
+        };
+
+        const union = (a, b) => {
+            const rootA = find(a);
+            const rootB = find(b);
+
+            if (rootA === rootB) return false;
+
+            const rankA = rank.get(rootA);
+            const rankB = rank.get(rootB);
+
+            if (rankA < rankB) {
+                parent.set(rootA, rootB);
+            } else if (rankA > rankB) {
+                parent.set(rootB, rootA);
+            } else {
+                parent.set(rootB, rootA);
+                rank.set(rootA, rankA + 1);
+            }
+            return true;
+        };
+
+        for (const node of nodes) {
+            parent.set(node, node);
+            rank.set(node, 0);
+        }
+
+        const sortedEdges = this.graph.edges
+            .map(edge => ({
+                ...edge,
+                weight: this.graph.normalizeWeight(edge.weight)
+            }))
+            .sort((a, b) => {
+                if (a.weight !== b.weight) return a.weight - b.weight;
+                if (a.from !== b.from) return a.from - b.from;
+                return a.to - b.to;
+            });
+
+        const mstEdges = [];
+        let totalWeight = 0;
+
+        for (const edge of sortedEdges) {
+            if (union(edge.from, edge.to)) {
+                mstEdges.push(edge);
+                totalWeight += edge.weight;
+            }
+        }
+
+        const componentCount = this.countComponents();
+        const disconnected = componentCount > 1;
+
+        return {
+            directed: false,
+            disconnected,
+            componentCount,
+            totalWeight,
+            edges: mstEdges
+        };
     }
 
     // Check if graph is bipartite using BFS 2-coloring
