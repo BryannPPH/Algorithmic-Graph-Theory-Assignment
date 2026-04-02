@@ -372,6 +372,20 @@ class GraphVisualizer {
                     }
                 }
                 break;
+            case 'weight':
+                if (!nodeId) {
+                    const edge = this.graph.getEdgeAtPosition(pos.x, pos.y);
+                    if (edge) {
+                        this.showEdgeWeightModal(edge.from, edge.to, (weight) => {
+                            edge.weight = weight;
+                            this.showToast(`Bobot sisi ${edge.from}-${edge.to} = ${this.formatWeight(weight)}`, 'success');
+                            this.update3DView();
+                        });
+                    } else {
+                        this.showToast('Klik pada sebuah sisi!', 'warning');
+                    }
+                }
+                break;
         }
     }
 
@@ -388,7 +402,7 @@ class GraphVisualizer {
 
         if (this.currentTool === 'move') {
             this.canvas.style.cursor = this.hoveredNode ? 'grab' : 'default';
-        } else if (this.currentTool === 'delete') {
+        } else if (this.currentTool === 'delete' || this.currentTool === 'weight') {
             this.canvas.style.cursor = this.hoveredNode || this.graph.getEdgeAtPosition(pos.x, pos.y) ? 'pointer' : 'default';
         } else {
             this.canvas.style.cursor = this.hoveredNode ? 'pointer' : 'crosshair';
@@ -403,13 +417,11 @@ class GraphVisualizer {
             const startNodeId = this.edgeStartNode;
             const endNodeId = this.graph.getNodeAtPosition(pos.x, pos.y, this.nodeRadius);
             if (endNodeId && endNodeId !== startNodeId && !this.graph.hasEdge(startNodeId, endNodeId)) {
-                this.showEdgeWeightModal(startNodeId, endNodeId, (weight) => {
-                    if (this.graph.addEdge(startNodeId, endNodeId, weight)) {
-                        this.showToast(`Sisi ${startNodeId}-${endNodeId} ditambahkan (bobot ${this.formatWeight(weight)})!`, 'success');
-                        this.updateStats();
-                        this.update3DView();
-                    }
-                });
+                if (this.graph.addEdge(startNodeId, endNodeId, 1)) {
+                    this.showToast(`Sisi ${startNodeId}-${endNodeId} ditambahkan!`, 'success');
+                    this.updateStats();
+                    this.update3DView();
+                }
             }
             this.edgeStartNode = null;
             this.tempEdgeEnd = null;
@@ -449,14 +461,15 @@ class GraphVisualizer {
         };
 
         // Tool buttons
-        const tools = ['addNodeTool', 'addEdgeTool', 'moveTool', 'deleteTool'];
-        const toolModes = ['addNode', 'addEdge', 'move', 'delete'];
-        const toolNames = ['Tambah Simpul', 'Tambah Sisi', 'Pindah', 'Hapus'];
+        const tools = ['addNodeTool', 'addEdgeTool', 'moveTool', 'deleteTool', 'weightTool'];
+        const toolModes = ['addNode', 'addEdge', 'move', 'delete', 'weight'];
+        const toolNames = ['Tambah Simpul', 'Tambah Sisi', 'Pindah', 'Hapus', 'Set Bobot Sisi'];
         const toolInstr = [
             'Klik canvas untuk menambah simpul',
             'Klik dan tarik antar simpul untuk membuat sisi',
             'Klik dan tarik simpul untuk memindahkan',
-            'Klik simpul atau sisi untuk menghapus'
+            'Klik simpul atau sisi untuk menghapus',
+            'Klik sisi untuk mengatur bobotnya'
         ];
 
         tools.forEach((id, i) => {
