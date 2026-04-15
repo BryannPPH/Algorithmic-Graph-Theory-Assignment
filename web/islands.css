@@ -219,12 +219,14 @@
 }
 
 .cell.land::after {
-    content: '🌴';
+    content: '';
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.92' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22v-5'/%3E%3Cpath d='M9 17h6'/%3E%3Cpath d='M7 12l5-7 5 7'/%3E%3Cpath d='M9 12l3-4 3 4'/%3E%3C/svg%3E") center/contain no-repeat;
     opacity: 0.9;
 }
 
@@ -240,8 +242,10 @@
 
 .cell.i1::after, .cell.i2::after, .cell.i3::after, .cell.i4::after,
 .cell.i5::after, .cell.i6::after, .cell.i7::after, .cell.i8::after {
-    content: '🏝️';
-    font-size: 18px;
+    content: '';
+    width: 18px;
+    height: 18px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.92' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18c2.5-1.5 5-1.5 7.5 0s5 1.5 10.5 0'/%3E%3Cpath d='M8 17l4-6 4 6'/%3E%3Cpath d='M10.5 13.5l1.5-2.5 1.5 2.5'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 
 /* ==================== LEGEND ==================== */
@@ -799,22 +803,26 @@
 }
 
 .grid-cell.land::after {
-    content: '🌴';
+    content: '';
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.92' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22v-5'/%3E%3Cpath d='M9 17h6'/%3E%3Cpath d='M7 12l5-7 5 7'/%3E%3Cpath d='M9 12l3-4 3 4'/%3E%3C/svg%3E") center/contain no-repeat;
     opacity: 0.8;
 }
 
 .cell.land::after {
-    content: '🌴';
+    content: '';
     position: absolute;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
-    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.92' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M12 22v-5'/%3E%3Cpath d='M9 17h6'/%3E%3Cpath d='M7 12l5-7 5 7'/%3E%3Cpath d='M9 12l3-4 3 4'/%3E%3C/svg%3E") center/contain no-repeat;
     opacity: 0.9;
 }
 
@@ -865,13 +873,18 @@
 .grid-cell.island-6::after,
 .grid-cell.island-7::after,
 .grid-cell.island-8::after {
-    content: '🏝️';
+    content: '';
+    width: 16px;
+    height: 16px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.92' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18c2.5-1.5 5-1.5 7.5 0s5 1.5 10.5 0'/%3E%3Cpath d='M8 17l4-6 4 6'/%3E%3Cpath d='M10.5 13.5l1.5-2.5 1.5 2.5'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 
 .cell.i1::after, .cell.i2::after, .cell.i3::after, .cell.i4::after,
 .cell.i5::after, .cell.i6::after, .cell.i7::after, .cell.i8::after {
-    content: '🏝️';
-    font-size: 18px;
+    content: '';
+    width: 18px;
+    height: 18px;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23ffffff' stroke-opacity='.92' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 18c2.5-1.5 5-1.5 7.5 0s5 1.5 10.5 0'/%3E%3Cpath d='M8 17l4-6 4 6'/%3E%3Cpath d='M10.5 13.5l1.5-2.5 1.5 2.5'/%3E%3C/svg%3E") center/contain no-repeat;
 }
 
 /* Grid Legend */
@@ -2294,5 +2307,66 @@ body.dark-mode .stat {
 }
 
 body.dark-mode .stat strong {
+    color: var(--accent);
+}
+
+.algo-icon,
+.result-icon,
+.result-emoji,
+.stat-icon,
+.view-toggle-island .toggle-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    line-height: 0;
+}
+
+.algo-icon {
+    width: 1.65rem;
+    height: 1.65rem;
+}
+
+.result-icon {
+    width: 1.55rem;
+    height: 1.55rem;
+}
+
+.result-emoji {
+    width: 3.35rem;
+    height: 3.35rem;
+    margin: 0 auto 14px;
+    color: rgba(255, 255, 255, 0.92);
+}
+
+.result-emoji svg,
+.result-icon svg,
+.algo-icon svg,
+.stat-icon svg,
+.view-toggle-island .toggle-icon svg {
+    width: 100%;
+    height: 100%;
+}
+
+.stat-icon {
+    width: 1.1rem;
+    height: 1.1rem;
+    color: #2E7D5A;
+}
+
+.island-3d-info p {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.info-line-icon {
+    width: 0.95rem;
+    height: 0.95rem;
+    flex: none;
+    color: currentColor;
+}
+
+body.dark-mode .stat-icon {
     color: var(--accent);
 }

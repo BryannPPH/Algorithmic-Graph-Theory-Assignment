@@ -408,6 +408,206 @@ class GraphAlgorithms {
         return { distance: dist.get(endNode), path };
     }
 
+    shortestPathWeightedSync(startNode, endNode) {
+        const nodes = Array.from(this.graph.nodes.keys());
+        if (!this.graph.nodes.has(startNode) || !this.graph.nodes.has(endNode)) {
+            return { distance: Infinity, path: [] };
+        }
+
+        const adj = this.graph.getWeightedAdjacencyList();
+        const dist = new Map();
+        const parent = new Map();
+        const visited = new Set();
+
+        for (const node of nodes) {
+            dist.set(node, Infinity);
+            parent.set(node, null);
+        }
+        dist.set(startNode, 0);
+
+        while (visited.size < nodes.length) {
+            let current = null;
+            let currentDist = Infinity;
+
+            for (const node of nodes) {
+                const candidateDist = dist.get(node);
+                if (!visited.has(node) && candidateDist < currentDist) {
+                    current = node;
+                    currentDist = candidateDist;
+                }
+            }
+
+            if (current === null || currentDist === Infinity) {
+                break;
+            }
+
+            visited.add(current);
+
+            if (current === endNode) {
+                break;
+            }
+
+            const neighbors = adj.get(current) || [];
+            for (const { node: neighbor, weight } of neighbors) {
+                if (visited.has(neighbor)) continue;
+
+                const newDist = currentDist + weight;
+                if (newDist < dist.get(neighbor)) {
+                    dist.set(neighbor, newDist);
+                    parent.set(neighbor, current);
+                }
+            }
+        }
+
+        if (dist.get(endNode) === Infinity) {
+            return { distance: Infinity, path: [] };
+        }
+
+        const path = [];
+        let current = endNode;
+        while (current !== null) {
+            path.unshift(current);
+            current = parent.get(current);
+        }
+
+        return { distance: dist.get(endNode), path };
+    }
+
+    solveTSPNearestNeighbor(startNode) {
+        const nodes = Array.from(this.graph.nodes.keys()).sort((a, b) => a - b);
+        if (!this.graph.nodes.has(startNode)) {
+            return {
+                hasTour: false,
+                reason: 'start-node-not-found',
+                heuristic: 'Nearest Neighbor'
+            };
+        }
+
+        if (nodes.length === 0) {
+            return {
+                hasTour: true,
+                heuristic: 'Nearest Neighbor',
+                startNode: null,
+                visitOrder: [],
+                cycle: [],
+                expandedPath: [],
+                segments: [],
+                totalWeight: 0,
+                usesShortestPathExpansion: false
+            };
+        }
+
+        if (nodes.length === 1) {
+            return {
+                hasTour: true,
+                heuristic: 'Nearest Neighbor',
+                startNode,
+                visitOrder: [startNode],
+                cycle: [startNode, startNode],
+                expandedPath: [startNode, startNode],
+                segments: [{ from: startNode, to: startNode, distance: 0, path: [startNode, startNode] }],
+                totalWeight: 0,
+                usesShortestPathExpansion: false
+            };
+        }
+
+        const pathCache = new Map();
+        const getShortestPath = (from, to) => {
+            const key = `${from}->${to}`;
+            if (!pathCache.has(key)) {
+                pathCache.set(key, this.shortestPathWeightedSync(from, to));
+            }
+            return pathCache.get(key);
+        };
+
+        const unvisited = new Set(nodes.filter(node => node !== startNode));
+        const visitOrder = [startNode];
+        const segments = [];
+
+        let current = startNode;
+        while (unvisited.size > 0) {
+            let bestCandidate = null;
+            let bestResult = null;
+
+            for (const candidate of unvisited) {
+                const result = getShortestPath(current, candidate);
+                if (result.distance === Infinity) continue;
+
+                if (
+                    bestCandidate === null ||
+                    result.distance < bestResult.distance ||
+                    (result.distance === bestResult.distance && candidate < bestCandidate)
+                ) {
+                    bestCandidate = candidate;
+                    bestResult = result;
+                }
+            }
+
+            if (bestCandidate === null) {
+                return {
+                    hasTour: false,
+                    reason: 'unreachable-node',
+                    failedFrom: current,
+                    remainingNodes: Array.from(unvisited).sort((a, b) => a - b),
+                    heuristic: 'Nearest Neighbor'
+                };
+            }
+
+            segments.push({
+                from: current,
+                to: bestCandidate,
+                distance: bestResult.distance,
+                path: bestResult.path.slice()
+            });
+
+            current = bestCandidate;
+            visitOrder.push(bestCandidate);
+            unvisited.delete(bestCandidate);
+        }
+
+        const returnToStart = getShortestPath(current, startNode);
+        if (returnToStart.distance === Infinity) {
+            return {
+                hasTour: false,
+                reason: 'cannot-return-to-start',
+                failedFrom: current,
+                startNode,
+                heuristic: 'Nearest Neighbor'
+            };
+        }
+
+        segments.push({
+            from: current,
+            to: startNode,
+            distance: returnToStart.distance,
+            path: returnToStart.path.slice()
+        });
+
+        const expandedPath = [startNode];
+        let totalWeight = 0;
+        let usesShortestPathExpansion = false;
+
+        for (const segment of segments) {
+            totalWeight += segment.distance;
+            if (segment.path.length > 2) {
+                usesShortestPathExpansion = true;
+            }
+            expandedPath.push(...segment.path.slice(1));
+        }
+
+        return {
+            hasTour: true,
+            heuristic: 'Nearest Neighbor',
+            startNode,
+            visitOrder,
+            cycle: [...visitOrder, startNode],
+            expandedPath,
+            segments,
+            totalWeight,
+            usesShortestPathExpansion
+        };
+    }
+
     // Check if graph is connected
     isConnected() {
         const nodes = Array.from(this.graph.nodes.keys());

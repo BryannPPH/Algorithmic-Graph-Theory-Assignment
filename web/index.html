@@ -24,11 +24,22 @@
         </div>
         <div class="nav-tabs">
             <a href="index.html" class="nav-tab active">
-                <span class="tab-icon">📊</span>
+                <span class="tab-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 20v-6"/>
+                        <path d="M12 20V8"/>
+                        <path d="M18 20V4"/>
+                    </svg>
+                </span>
                 Graf Visualizer
             </a>
             <a href="islands.html" class="nav-tab">
-                <span class="tab-icon">🏝️</span>
+                <span class="tab-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 21s-6-4.35-6-10a6 6 0 1 1 12 0c0 5.65-6 10-6 10z"/>
+                        <circle cx="12" cy="11" r="2.5"/>
+                    </svg>
+                </span>
                 Island Counter
             </a>
         </div>
@@ -139,6 +150,9 @@
                     <button id="opMST" class="op-btn">
                         <span class="op-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="5" cy="6" r="2"/><circle cx="19" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M7 7.2l3.2 8"/><path d="M17 7.2l-3.2 8"/></svg></span>Pohon Pembangun Minimal
                     </button>
+                    <button id="opTSP" class="op-btn">
+                        <span class="op-icon"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="6" r="2"/><circle cx="12" cy="18" r="2"/><path d="M8 6h8"/><path d="M17 7.5l-4 8"/><path d="M7 7.5l4 8"/></svg></span>TSP Heuristik
+                    </button>
                 </div>
             </div>
 
@@ -200,11 +214,24 @@
                 <!-- View Toggle -->
                 <div class="view-toggle-container">
                     <button id="view2DBtn" class="view-toggle-btn active">
-                        <span class="toggle-icon">📊</span>
+                        <span class="toggle-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M6 20v-6"/>
+                                <path d="M12 20V8"/>
+                                <path d="M18 20V4"/>
+                            </svg>
+                        </span>
                         <span>2D View</span>
                     </button>
                     <button id="view3DBtn" class="view-toggle-btn">
-                        <span class="toggle-icon">🌐</span>
+                        <span class="toggle-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="12" cy="12" r="9"/>
+                                <path d="M3 12h18"/>
+                                <path d="M12 3a14 14 0 0 1 0 18"/>
+                                <path d="M12 3a14 14 0 0 0 0 18"/>
+                            </svg>
+                        </span>
                         <span>3D View</span>
                     </button>
                 </div>
@@ -240,9 +267,32 @@
                     
                     <!-- 3D Info -->
                     <div class="view-3d-info-inline">
-                        <p>🖱️ <strong>Drag</strong> untuk memutar</p>
-                        <p>🔍 <strong>Scroll</strong> untuk zoom</p>
-                        <p>➡️ <strong>Right-click</strong> untuk pan</p>
+                        <p>
+                            <svg class="info-line-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M12 2v20"/>
+                                <path d="M2 12h20"/>
+                                <path d="M5 9l-3 3 3 3"/>
+                                <path d="M9 5l3-3 3 3"/>
+                                <path d="M15 19l-3 3-3-3"/>
+                                <path d="M19 9l3 3-3 3"/>
+                            </svg>
+                            <strong>Drag</strong> untuk memutar
+                        </p>
+                        <p>
+                            <svg class="info-line-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <circle cx="11" cy="11" r="7"/>
+                                <path d="M20 20l-3.5-3.5"/>
+                            </svg>
+                            <strong>Scroll</strong> untuk zoom
+                        </p>
+                        <p>
+                            <svg class="info-line-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                <path d="M4 12h16"/>
+                                <path d="M8 8l-4 4 4 4"/>
+                                <path d="M16 8l4 4-4 4"/>
+                            </svg>
+                            <strong>Right-click</strong> untuk pan
+                        </p>
                     </div>
                 </div>
             </div>

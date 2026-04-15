@@ -22,6 +22,15 @@ class GraphVisualizer {
         this.nodeRadius = 28;
         this.pulsePhase = 0;
         this.particles = [];
+        this.viewport = {
+            scale: 1,
+            minScale: 0.35,
+            maxScale: 3,
+            offsetX: 0,
+            offsetY: 0
+        };
+        this.isPanning = false;
+        this.panLastScreenPos = null;
         
         // Electric animation state
         this.electricNodes = new Set();
@@ -270,6 +279,43 @@ class GraphVisualizer {
         ctx.closePath();
     }
 
+    getIconMarkup(name, classes = 'ui-icon ui-icon-md') {
+        const icons = {
+            start: '<circle cx="6" cy="12" r="2"/><path d="M8 12h10"/><path d="M14 8l4 4-4 4"/>',
+            target: '<circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 3v2"/><path d="M12 19v2"/><path d="M3 12h2"/><path d="M19 12h2"/>',
+            dfs: '<path d="M12 19V5"/><path d="M6 11l6-6 6 6"/>',
+            bfs: '<path d="M4 7h16"/><path d="M4 12h16"/><path d="M4 17h16"/>',
+            route: '<circle cx="6" cy="18" r="2"/><circle cx="18" cy="6" r="2"/><path d="M8 18c4 0 4-6 8-6"/>',
+            'x-circle': '<circle cx="12" cy="12" r="9"/><path d="M9 9l6 6"/><path d="M15 9l-6 6"/>',
+            'check-circle': '<circle cx="12" cy="12" r="9"/><path d="M8.5 12.5l2.5 2.5 4.5-5"/>',
+            alert: '<path d="M12 3l9 16H3L12 3z"/><path d="M12 9v4"/><path d="M12 17h.01"/>',
+            ruler: '<path d="M4 19L19 4"/><path d="M14 5l5 5"/><path d="M8 11l2 2"/><path d="M5 14l2 2"/>',
+            nodes: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="6" r="2.5"/><circle cx="6" cy="18" r="2.5"/><circle cx="18" cy="18" r="2.5"/>',
+            star: '<path d="M12 3.5l2.7 5.47 6.03.88-4.36 4.24 1.03 5.99L12 17.25 6.6 20.08l1.03-5.99-4.36-4.24 6.03-.88L12 3.5z"/>',
+            bipartite: '<circle cx="7" cy="7" r="4"/><circle cx="17" cy="17" r="4"/><path d="M10 10l4 4"/>',
+            diameter: '<circle cx="12" cy="12" r="9"/><path d="M3 12h18"/>',
+            cycle: '<path d="M21 12a9 9 0 1 1-6.22-8.56"/><path d="M21 3v6h-6"/>',
+            ring: '<circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4"/>',
+            info: '<circle cx="12" cy="12" r="9"/><path d="M12 10v6"/><path d="M12 7h.01"/>'
+        };
+
+        const markup = icons[name] || icons.info;
+        return `<svg class="${classes}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${markup}</svg>`;
+    }
+
+    getResultHeading(iconName, title) {
+        return `<h3>${this.getIconMarkup(iconName, 'ui-icon ui-icon-lg')}<span>${title}</span></h3>`;
+    }
+
+    getResultNote(text, style = '') {
+        const styleAttr = style ? ` style="${style}"` : '';
+        return `<p class="result-note"${styleAttr}>${this.getIconMarkup('info', 'ui-icon ui-icon-md')}<span>${text}</span></p>`;
+    }
+
+    getModalLabel(iconName, text) {
+        return `<label class="modal-label-with-icon">${this.getIconMarkup(iconName, 'ui-icon ui-icon-md')}<span>${text}</span></label>`;
+    }
+
     // ==================== EXISTING METHODS ====================
     resizeCanvas() {
         const rect = this.canvasContainer.getBoundingClientRect();
@@ -319,17 +365,276 @@ class GraphVisualizer {
         this.canvas.addEventListener('mousemove', (e) => this.onMouseMove(e));
         this.canvas.addEventListener('mouseup', (e) => this.onMouseUp(e));
         this.canvas.addEventListener('mouseleave', () => this.onMouseLeave());
+        this.canvas.addEventListener('wheel', (e) => this.onWheel(e), { passive: false });
+        this.canvas.addEventListener('contextmenu', (e) => e.preventDefault());
     }
 
-    getPos(e) {
+    getScreenPos(e) {
         const rect = this.canvas.getBoundingClientRect();
         return { x: e.clientX - rect.left, y: e.clientY - rect.top };
     }
 
+    screenToWorld(x, y) {
+        return {
+            x: (x - this.viewport.offsetX) / this.viewport.scale,
+            y: (y - this.viewport.offsetY) / this.viewport.scale
+        };
+    }
+
+    getPos(e) {
+        const pos = this.getScreenPos(e);
+        return this.screenToWorld(pos.x, pos.y);
+    }
+
+    getVisibleWorldBounds(padding = 0) {
+        const left = (-this.viewport.offsetX) / this.viewport.scale - padding;
+        const top = (-this.viewport.offsetY) / this.viewport.scale - padding;
+        const right = (this.canvas.width - this.viewport.offsetX) / this.viewport.scale + padding;
+        const bottom = (this.canvas.height - this.viewport.offsetY) / this.viewport.scale + padding;
+
+        return { left, top, right, bottom };
+    }
+
+    startPan(screenPos) {
+        this.isPanning = true;
+        this.panLastScreenPos = screenPos;
+        this.hoveredNode = null;
+        this.canvas.style.cursor = 'grabbing';
+    }
+
+    stopPan() {
+        this.isPanning = false;
+        this.panLastScreenPos = null;
+    }
+
+    zoomAt(screenX, screenY, zoomFactor) {
+        const previousScale = this.viewport.scale;
+        const nextScale = Math.max(
+            this.viewport.minScale,
+            Math.min(this.viewport.maxScale, previousScale * zoomFactor)
+        );
+
+        if (nextScale === previousScale) return;
+
+        const worldX = (screenX - this.viewport.offsetX) / previousScale;
+        const worldY = (screenY - this.viewport.offsetY) / previousScale;
+
+        this.viewport.scale = nextScale;
+        this.viewport.offsetX = screenX - worldX * nextScale;
+        this.viewport.offsetY = screenY - worldY * nextScale;
+    }
+
+    hasReciprocalDirectedEdge(edge) {
+        return this.graph.directed && this.graph.hasEdge(edge.to, edge.from);
+    }
+
+    getEdgeGeometry(edge) {
+        const fromNode = this.graph.nodes.get(edge.from);
+        const toNode = this.graph.nodes.get(edge.to);
+        if (!fromNode || !toNode) return null;
+
+        const dx = toNode.x - fromNode.x;
+        const dy = toNode.y - fromNode.y;
+        const length = Math.hypot(dx, dy);
+        if (!length) return null;
+
+        const unitX = dx / length;
+        const unitY = dy / length;
+        const normalX = -unitY;
+        const normalY = unitX;
+
+        let offsetX = 0;
+        let offsetY = 0;
+
+        if (this.hasReciprocalDirectedEdge(edge)) {
+            const firstId = Math.min(edge.from, edge.to);
+            const secondId = Math.max(edge.from, edge.to);
+            const firstNode = this.graph.nodes.get(firstId);
+            const secondNode = this.graph.nodes.get(secondId);
+
+            if (firstNode && secondNode) {
+                const pairDx = secondNode.x - firstNode.x;
+                const pairDy = secondNode.y - firstNode.y;
+                const pairLength = Math.hypot(pairDx, pairDy);
+
+                if (pairLength) {
+                    const pairNormalX = -pairDy / pairLength;
+                    const pairNormalY = pairDx / pairLength;
+                    const offsetDistance = Math.max(16, this.nodeRadius * 0.7);
+                    const offsetSign = edge.from === firstId && edge.to === secondId ? 1 : -1;
+                    offsetX = pairNormalX * offsetDistance * offsetSign;
+                    offsetY = pairNormalY * offsetDistance * offsetSign;
+                }
+            }
+        }
+
+        const offsetDistance = Math.hypot(offsetX, offsetY);
+        const trimmedRadius = offsetDistance < this.nodeRadius
+            ? Math.sqrt(this.nodeRadius * this.nodeRadius - offsetDistance * offsetDistance)
+            : this.nodeRadius * 0.4;
+
+        const startX = fromNode.x + unitX * trimmedRadius + offsetX;
+        const startY = fromNode.y + unitY * trimmedRadius + offsetY;
+        const endX = toNode.x - unitX * trimmedRadius + offsetX;
+        const endY = toNode.y - unitY * trimmedRadius + offsetY;
+        const midX = (startX + endX) / 2;
+        const midY = (startY + endY) / 2;
+        const labelDistance = this.hasReciprocalDirectedEdge(edge) ? 10 : 18;
+
+        return {
+            fromNode,
+            toNode,
+            angle: Math.atan2(dy, dx),
+            startX,
+            startY,
+            endX,
+            endY,
+            midX,
+            midY,
+            labelX: midX + normalX * labelDistance,
+            labelY: midY + normalY * labelDistance,
+            normalX,
+            normalY
+        };
+    }
+
+    getEdgeLabelText(edge) {
+        const weight = this.graph.normalizeWeight(edge.weight);
+        return this.formatWeight(weight);
+    }
+
+    getEdgeLabelBounds(edge, geometry = null) {
+        if (!this.shouldShowEdgeWeights()) return null;
+
+        const targetGeometry = geometry || this.getEdgeGeometry(edge);
+        if (!targetGeometry) return null;
+
+        const label = this.getEdgeLabelText(edge);
+        const ctx = this.ctx;
+        ctx.save();
+        ctx.font = '600 12px Inter, sans-serif';
+        const labelWidth = ctx.measureText(label).width + 16;
+        ctx.restore();
+
+        return {
+            label,
+            x: targetGeometry.labelX - labelWidth / 2,
+            y: targetGeometry.labelY - 12,
+            width: labelWidth,
+            height: 24
+        };
+    }
+
+    pointToSegmentDistance(px, py, x1, y1, x2, y2) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        const lengthSq = dx * dx + dy * dy;
+
+        if (!lengthSq) {
+            return Math.hypot(px - x1, py - y1);
+        }
+
+        let t = ((px - x1) * dx + (py - y1) * dy) / lengthSq;
+        t = Math.max(0, Math.min(1, t));
+
+        const closestX = x1 + t * dx;
+        const closestY = y1 + t * dy;
+        return Math.hypot(px - closestX, py - closestY);
+    }
+
+    getEdgeAtWorldPosition(x, y) {
+        let closestEdge = null;
+        let closestDistance = Infinity;
+        const threshold = 10 / this.viewport.scale;
+
+        for (let i = this.graph.edges.length - 1; i >= 0; i--) {
+            const edge = this.graph.edges[i];
+            const geometry = this.getEdgeGeometry(edge);
+            if (!geometry) continue;
+
+            const labelBounds = this.getEdgeLabelBounds(edge, geometry);
+            if (
+                labelBounds &&
+                x >= labelBounds.x &&
+                x <= labelBounds.x + labelBounds.width &&
+                y >= labelBounds.y &&
+                y <= labelBounds.y + labelBounds.height
+            ) {
+                return edge;
+            }
+
+            const distance = this.pointToSegmentDistance(
+                x,
+                y,
+                geometry.startX,
+                geometry.startY,
+                geometry.endX,
+                geometry.endY
+            );
+
+            if (distance <= threshold && distance < closestDistance) {
+                closestEdge = edge;
+                closestDistance = distance;
+            }
+        }
+
+        return closestEdge;
+    }
+
+    onWheel(e) {
+        if (this.viewMode === '3d') return;
+
+        e.preventDefault();
+
+        const screenPos = this.getScreenPos(e);
+        const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        this.zoomAt(screenPos.x, screenPos.y, zoomFactor);
+    }
+
+    updateCanvasCursor(worldPos = null) {
+        if (this.viewMode === '3d') return;
+
+        if (this.isPanning || this.draggingNode !== null) {
+            this.canvas.style.cursor = 'grabbing';
+            return;
+        }
+
+        const targetPos = worldPos;
+        const hoveredNode = targetPos
+            ? this.graph.getNodeAtPosition(targetPos.x, targetPos.y, this.nodeRadius)
+            : this.hoveredNode;
+        const hoveredEdge = targetPos
+            ? this.getEdgeAtWorldPosition(targetPos.x, targetPos.y)
+            : null;
+
+        if (this.currentTool === 'move') {
+            this.canvas.style.cursor = hoveredNode ? 'grab' : 'move';
+        } else if (this.currentTool === 'delete' || this.currentTool === 'weight') {
+            this.canvas.style.cursor = hoveredNode || hoveredEdge ? 'pointer' : 'default';
+        } else {
+            this.canvas.style.cursor = hoveredNode ? 'pointer' : 'crosshair';
+        }
+    }
+
     onMouseDown(e) {
         if (this.isAnimating || this.viewMode === '3d') return;
+
+        if (e.button === 1 || e.button === 2) {
+            e.preventDefault();
+            this.startPan(this.getScreenPos(e));
+            return;
+        }
+
+        if (e.button !== 0) return;
+
         const pos = this.getPos(e);
         const nodeId = this.graph.getNodeAtPosition(pos.x, pos.y, this.nodeRadius);
+
+        if (this.currentTool === 'move' && !nodeId) {
+            e.preventDefault();
+            this.startPan(this.getScreenPos(e));
+            return;
+        }
 
         switch (this.currentTool) {
             case 'addNode':
@@ -363,7 +668,7 @@ class GraphVisualizer {
                     this.updateStats();
                     this.update3DView();
                 } else {
-                    const edge = this.graph.getEdgeAtPosition(pos.x, pos.y);
+                    const edge = this.getEdgeAtWorldPosition(pos.x, pos.y);
                     if (edge) {
                         this.graph.removeEdge(edge.from, edge.to);
                         this.showToast(`Sisi dihapus!`, 'error');
@@ -374,11 +679,14 @@ class GraphVisualizer {
                 break;
             case 'weight':
                 if (!nodeId) {
-                    const edge = this.graph.getEdgeAtPosition(pos.x, pos.y);
+                    const edge = this.getEdgeAtWorldPosition(pos.x, pos.y);
                     if (edge) {
-                        this.showEdgeWeightModal(edge.from, edge.to, (weight) => {
+                        this.showEdgeWeightModal(edge, (weight) => {
                             edge.weight = weight;
-                            this.showToast(`Bobot sisi ${edge.from}-${edge.to} = ${this.formatWeight(weight)}`, 'success');
+                            const edgeLabel = this.graph.directed
+                                ? `${edge.from}->${edge.to}`
+                                : `${edge.from}-${edge.to}`;
+                            this.showToast(`Bobot sisi ${edgeLabel} = ${this.formatWeight(weight)}`, 'success');
                             this.update3DView();
                         });
                     } else {
@@ -391,6 +699,18 @@ class GraphVisualizer {
 
     onMouseMove(e) {
         if (this.viewMode === '3d') return;
+
+        const screenPos = this.getScreenPos(e);
+
+        if (this.isPanning && this.panLastScreenPos) {
+            this.viewport.offsetX += screenPos.x - this.panLastScreenPos.x;
+            this.viewport.offsetY += screenPos.y - this.panLastScreenPos.y;
+            this.panLastScreenPos = screenPos;
+            this.hoveredNode = null;
+            this.canvas.style.cursor = 'grabbing';
+            return;
+        }
+
         const pos = this.getPos(e);
         this.hoveredNode = this.graph.getNodeAtPosition(pos.x, pos.y, this.nodeRadius);
 
@@ -400,18 +720,21 @@ class GraphVisualizer {
             this.tempEdgeEnd = pos;
         }
 
-        if (this.currentTool === 'move') {
-            this.canvas.style.cursor = this.hoveredNode ? 'grab' : 'default';
-        } else if (this.currentTool === 'delete' || this.currentTool === 'weight') {
-            this.canvas.style.cursor = this.hoveredNode || this.graph.getEdgeAtPosition(pos.x, pos.y) ? 'pointer' : 'default';
-        } else {
-            this.canvas.style.cursor = this.hoveredNode ? 'pointer' : 'crosshair';
-        }
+        this.updateCanvasCursor(pos);
     }
 
     onMouseUp(e) {
         if (this.viewMode === '3d') return;
+
         const pos = this.getPos(e);
+
+        if (this.isPanning) {
+            this.stopPan();
+            this.updateCanvasCursor(pos);
+            return;
+        }
+
+        if (e.button !== 0) return;
 
         if (this.edgeStartNode !== null) {
             const startNodeId = this.edgeStartNode;
@@ -430,16 +753,19 @@ class GraphVisualizer {
 
         if (this.draggingNode !== null) {
             this.draggingNode = null;
-            this.canvas.style.cursor = 'grab';
             this.update3DView();
         }
+
+        this.updateCanvasCursor(pos);
     }
 
     onMouseLeave() {
+        this.stopPan();
         this.edgeStartNode = null;
         this.tempEdgeEnd = null;
         this.draggingNode = null;
         this.hoveredNode = null;
+        this.canvas.style.cursor = 'default';
     }
 
     setupUIEvents() {
@@ -506,6 +832,7 @@ class GraphVisualizer {
         document.getElementById('opGirth').onclick = () => this.runGirth();
         document.getElementById('opShortestPath').onclick = () => this.selectTwoNodesAndRun('Lintasan Terpendek', this.runShortestPath.bind(this));
         document.getElementById('opMST').onclick = () => this.runMinimumSpanningTree();
+        document.getElementById('opTSP').onclick = () => this.selectNodeAndRun('Travelling Salesman Problem (TSP)', this.runTSP.bind(this));
 
         // Actions
         document.getElementById('clearGraph').onclick = () => {
@@ -584,7 +911,17 @@ class GraphVisualizer {
     // ==================== RENDERING ====================
     render() {
         const ctx = this.ctx;
+        ctx.setTransform(1, 0, 0, 1, 0, 0);
         ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+        ctx.save();
+        ctx.setTransform(
+            this.viewport.scale,
+            0,
+            0,
+            this.viewport.scale,
+            this.viewport.offsetX,
+            this.viewport.offsetY
+        );
         this.drawGrid();
         this.drawParticles();
 
@@ -618,22 +955,30 @@ class GraphVisualizer {
 
         // Draw electric effects on top
         this.drawElectricEffects();
+        ctx.restore();
     }
 
     drawGrid() {
         const ctx = this.ctx;
+        const gridSize = 30;
+        const bounds = this.getVisibleWorldBounds(gridSize * 2);
+        const startX = Math.floor(bounds.left / gridSize) * gridSize;
+        const endX = Math.ceil(bounds.right / gridSize) * gridSize;
+        const startY = Math.floor(bounds.top / gridSize) * gridSize;
+        const endY = Math.ceil(bounds.bottom / gridSize) * gridSize;
+
         ctx.strokeStyle = 'rgba(139, 115, 85, 0.08)';
-        ctx.lineWidth = 1;
-        for (let x = 0; x < this.canvas.width; x += 30) {
+        ctx.lineWidth = 1 / this.viewport.scale;
+        for (let x = startX; x <= endX; x += gridSize) {
             ctx.beginPath();
-            ctx.moveTo(x, 0);
-            ctx.lineTo(x, this.canvas.height);
+            ctx.moveTo(x, startY);
+            ctx.lineTo(x, endY);
             ctx.stroke();
         }
-        for (let y = 0; y < this.canvas.height; y += 30) {
+        for (let y = startY; y <= endY; y += gridSize) {
             ctx.beginPath();
-            ctx.moveTo(0, y);
-            ctx.lineTo(this.canvas.width, y);
+            ctx.moveTo(startX, y);
+            ctx.lineTo(endX, y);
             ctx.stroke();
         }
     }
@@ -926,19 +1271,14 @@ class GraphVisualizer {
     // Enhanced edge drawing with electric effect
     drawEdgeWithElectric(edge, isElectric = false, electricColor = '#4facfe') {
         const ctx = this.ctx;
-        const fromNode = this.graph.nodes.get(edge.from);
-        const toNode = this.graph.nodes.get(edge.to);
-        if (!fromNode || !toNode) return;
+        const geometry = this.getEdgeGeometry(edge);
+        if (!geometry) return;
+
+        const { angle, startX, startY, endX, endY } = geometry;
 
         const edgeKey = `${edge.from}-${edge.to}`;
         const baseColor = this.edgeColors.get(edgeKey) || '#A69076';
         const color = isElectric ? electricColor : baseColor;
-
-        const angle = Math.atan2(toNode.y - fromNode.y, toNode.x - fromNode.x);
-        const startX = fromNode.x + Math.cos(angle) * this.nodeRadius;
-        const startY = fromNode.y + Math.sin(angle) * this.nodeRadius;
-        const endX = toNode.x - Math.cos(angle) * this.nodeRadius;
-        const endY = toNode.y - Math.sin(angle) * this.nodeRadius;
 
         // Electric glow for edges
         if (isElectric) {
@@ -1001,22 +1341,16 @@ class GraphVisualizer {
         }
 
         if (this.shouldShowEdgeWeights()) {
-            const weight = this.graph.normalizeWeight(edge.weight);
-            const label = this.formatWeight(weight);
-            const midX = (startX + endX) / 2;
-            const midY = (startY + endY) / 2;
-            const labelX = midX - Math.sin(angle) * 18;
-            const labelY = midY + Math.cos(angle) * 18;
+            const label = this.getEdgeLabelText(edge);
+            const labelBounds = this.getEdgeLabelBounds(edge, geometry);
+            if (!labelBounds) return;
 
             ctx.save();
             ctx.font = '600 12px Inter, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
 
-            const labelWidth = ctx.measureText(label).width + 16;
-            const labelHeight = 24;
-
-            this.drawRoundedRect(ctx, labelX - labelWidth / 2, labelY - labelHeight / 2, labelWidth, labelHeight, 8);
+            this.drawRoundedRect(ctx, labelBounds.x, labelBounds.y, labelBounds.width, labelBounds.height, 8);
             ctx.fillStyle = isElectric ? 'rgba(255, 255, 255, 0.96)' : 'rgba(250, 248, 245, 0.95)';
             ctx.fill();
             ctx.strokeStyle = isElectric ? electricColor : '#C4A35A';
@@ -1024,7 +1358,7 @@ class GraphVisualizer {
             ctx.stroke();
 
             ctx.fillStyle = isElectric ? electricColor : '#5C5651';
-            ctx.fillText(label, labelX, labelY + 0.5);
+            ctx.fillText(label, labelBounds.x + labelBounds.width / 2, labelBounds.y + labelBounds.height / 2 + 0.5);
             ctx.restore();
         }
     }
@@ -1039,15 +1373,16 @@ class GraphVisualizer {
         document.getElementById('resultModal').classList.remove('show');
     }
 
-    showEdgeWeightModal(fromNode, toNode, callback) {
-        const directionLabel = this.graph.directed ? `${fromNode} -> ${toNode}` : `${fromNode} - ${toNode}`;
+    showEdgeWeightModal(edge, callback) {
+        const directionLabel = this.graph.directed ? `${edge.from} -> ${edge.to}` : `${edge.from} - ${edge.to}`;
+        const currentWeight = this.formatWeight(this.graph.normalizeWeight(edge.weight));
         document.getElementById('nodeSelectTitle').textContent = 'Bobot Sisi';
         document.getElementById('nodeSelectBody').innerHTML = `
             <div class="node-select-group">
                 <label>Masukkan bobot untuk sisi <strong>${directionLabel}</strong>:</label>
                 <div class="edge-weight-panel">
-                    <input id="edgeWeightInput" class="edge-weight-input" type="number" min="0" step="0.1" value="1">
-                    <p class="edge-weight-hint">Gunakan bobot >= 0. Nilai default adalah 1.</p>
+                    <input id="edgeWeightInput" class="edge-weight-input" type="number" min="0" step="0.1" value="${currentWeight}">
+                    <p class="edge-weight-hint">Gunakan bobot >= 0. Sisi yang sedang diedit adalah ${directionLabel}.</p>
                 </div>
             </div>
         `;
@@ -1096,24 +1431,24 @@ class GraphVisualizer {
         if (isTwoNode) {
             html = `
                 <div class="node-select-group">
-                    <label>🚀 Pilih Simpul Awal:</label>
+                    ${this.getModalLabel('start', 'Pilih Simpul Awal:')}
                     <div class="node-buttons" id="nodesA">
-                        ${nodes.map(n => `<button class="node-btn" data-node="${n}">${n}</button>`).join('')}
+                        ${nodes.map(n => `<button class="node-btn" data-node="${n}"><span>${n}</span></button>`).join('')}
                     </div>
                 </div>
                 <div class="node-select-group">
-                    <label>🎯 Pilih Simpul Tujuan:</label>
+                    ${this.getModalLabel('target', 'Pilih Simpul Tujuan:')}
                     <div class="node-buttons" id="nodesB">
-                        ${nodes.map(n => `<button class="node-btn" data-node="${n}">${n}</button>`).join('')}
+                        ${nodes.map(n => `<button class="node-btn" data-node="${n}"><span>${n}</span></button>`).join('')}
                     </div>
                 </div>
             `;
         } else {
             html = `
                 <div class="node-select-group">
-                    <label>🎯 Pilih Simpul:</label>
+                    ${this.getModalLabel('target', 'Pilih Simpul:')}
                     <div class="node-buttons" id="nodesA">
-                        ${nodes.map(n => `<button class="node-btn" data-node="${n}">${n}</button>`).join('')}
+                        ${nodes.map(n => `<button class="node-btn" data-node="${n}"><span>${n}</span></button>`).join('')}
                     </div>
                 </div>
             `;
@@ -1263,7 +1598,7 @@ class GraphVisualizer {
         this.isAnimating = false;
         const pathHtml = order.map(n => `<span class="path-node">${n}</span>`).join('<span class="path-arrow">-></span>');
         this.showResultModal(`
-            <h3>🔍 DFS Traversal</h3>
+            ${this.getResultHeading('dfs', 'DFS Traversal')}
             <p>Pencarian dimulai dari simpul <strong>${startNode}</strong></p>
             <p>Total simpul dikunjungi: <strong>${order.length}</strong> simpul</p>
             <div class="path-display">${pathHtml}</div>
@@ -1353,7 +1688,7 @@ class GraphVisualizer {
         this.isAnimating = false;
         const pathHtml = order.map(n => `<span class="path-node">${n}</span>`).join('<span class="path-arrow">-></span>');
         this.showResultModal(`
-            <h3>🌊 BFS Traversal</h3>
+            ${this.getResultHeading('bfs', 'BFS Traversal')}
             <p>Pencarian dimulai dari simpul <strong>${startNode}</strong></p>
             <p>Total simpul dikunjungi: <strong>${order.length}</strong> simpul</p>
             <div class="path-display">${pathHtml}</div>
@@ -1437,13 +1772,13 @@ class GraphVisualizer {
 
         if (result.distance === -1) {
             this.showResultModal(`
-                <h3>❌ Tidak Ada Jalur</h3>
+                ${this.getResultHeading('x-circle', 'Tidak Ada Jalur')}
                 <p>Simpul <strong>${startNode}</strong> dan <strong>${endNode}</strong> tidak terhubung.</p>
             `);
         } else {
             const pathHtml = result.path.map(n => `<span class="path-node">${n}</span>`).join('<span class="path-arrow">-></span>');
             this.showResultModal(`
-                <h3>📏 Jalur Terpendek Ditemukan!</h3>
+                ${this.getResultHeading('route', 'Jalur Terpendek Ditemukan!')}
                 <p>Dari simpul <strong>${startNode}</strong> ke simpul <strong>${endNode}</strong></p>
                 <p>Jarak minimum: <strong>${result.distance}</strong> sisi</p>
                 <div class="path-display">${pathHtml}</div>
@@ -1569,12 +1904,12 @@ class GraphVisualizer {
                 if (this.graph3DView) this.graph3DView.highlightNode(id, 0x4A7C59);
             }
             this.showResultModal(`
-                <h3>✅ Graf Terhubung!</h3>
+                ${this.getResultHeading('check-circle', 'Graf Terhubung!')}
                 <p>Semua <strong>${this.graph.nodes.size}</strong> simpul saling terhubung.</p>
             `);
         } else {
             this.showResultModal(`
-                <h3>⚠️ Graf Tidak Terhubung</h3>
+                ${this.getResultHeading('alert', 'Graf Tidak Terhubung')}
                 <p>Graf memiliki <strong>${count}</strong> komponen terpisah.</p>
             `);
         }
@@ -1592,7 +1927,7 @@ class GraphVisualizer {
         if (this.graph3DView) this.graph3DView.highlightNode(startNode, 0x4A7C59);
 
         this.showResultModal(`
-            <h3>📐 Ukuran Komponen</h3>
+            ${this.getResultHeading('ruler', 'Ukuran Komponen')}
             <p>Komponen dengan simpul <strong>${startNode}</strong></p>
             <p>Ukuran: <strong>${result.size}</strong> simpul</p>
             <p>Anggota: <strong>${result.nodes.sort((a, b) => a - b).join(', ')}</strong></p>
@@ -1622,7 +1957,7 @@ class GraphVisualizer {
         ).join('');
 
         this.showResultModal(`
-            <h3>#️⃣ Analisis Komponen</h3>
+            ${this.getResultHeading('nodes', 'Analisis Komponen')}
             <p>Total komponen: <strong>${components.length}</strong></p>
             <div class="component-list">${details}</div>
         `);
@@ -1641,7 +1976,7 @@ class GraphVisualizer {
         }
 
         this.showResultModal(`
-            <h3>🏆 Komponen Terbesar</h3>
+            ${this.getResultHeading('star', 'Komponen Terbesar')}
             <p>Ukuran: <strong>${result.size}</strong> simpul</p>
             <p>Anggota: <strong>${result.nodes.join(', ')}</strong></p>
         `);
@@ -1705,7 +2040,7 @@ class GraphVisualizer {
             const setBHtml = result.setB.sort((a, b) => a - b).map(n => `<span class="path-node" style="background:linear-gradient(135deg, #f093fb, #f5576c)">${n}</span>`).join(' ');
 
             this.showResultModal(`
-                <h3>🎨 Graf adalah Bipartite!</h3>
+                ${this.getResultHeading('bipartite', 'Graf adalah Bipartite!')}
                 <p>Graf ini <strong>bipartite</strong> — dapat dibagi menjadi 2 himpunan tanpa sisi dalam satu himpunan.</p>
                 <div style="margin-top:16px">
                     <p><strong>Himpunan A</strong> <span class="color-dot" style="background:#667eea;display:inline-block;width:14px;height:14px;border-radius:50%;vertical-align:middle;margin-left:6px"></span> (${result.setA.length} simpul):</p>
@@ -1723,9 +2058,9 @@ class GraphVisualizer {
             }
 
             this.showResultModal(`
-                <h3>❌ Graf Bukan Bipartite</h3>
+                ${this.getResultHeading('x-circle', 'Graf Bukan Bipartite')}
                 <p>Graf ini <strong>tidak bipartite</strong> — terdapat siklus ganjil sehingga tidak dapat dibagi menjadi 2 himpunan.</p>
-                <p style="margin-top:12px;color:var(--text-muted);font-size:0.95rem">💡 Sebuah graf adalah bipartite jika dan hanya jika tidak memiliki siklus dengan panjang ganjil.</p>
+                ${this.getResultNote('Sebuah graf adalah bipartite jika dan hanya jika tidak memiliki siklus dengan panjang ganjil.')}
             `);
         }
     }
@@ -1774,10 +2109,10 @@ class GraphVisualizer {
         if (result.disconnected) {
             this.isAnimating = false;
             this.showResultModal(`
-                <h3>⚠️ Graf Tidak Terhubung</h3>
+                ${this.getResultHeading('alert', 'Graf Tidak Terhubung')}
                 <p>Diameter tidak terdefinisi karena graf <strong>tidak terhubung</strong>.</p>
                 <p>Diameter = <strong>∞ (tak hingga)</strong></p>
-                <p style="margin-top:12px;color:var(--text-muted);font-size:0.95rem">💡 Diameter hanya terdefinisi pada graf terhubung. Hubungkan semua komponen terlebih dahulu.</p>
+                ${this.getResultNote('Diameter hanya terdefinisi pada graf terhubung. Hubungkan semua komponen terlebih dahulu.')}
             `);
             return;
         }
@@ -1844,11 +2179,11 @@ class GraphVisualizer {
         }).join('<span class="path-arrow">→</span>');
 
         this.showResultModal(`
-            <h3>📐 Diameter Graf</h3>
+            ${this.getResultHeading('diameter', 'Diameter Graf')}
             <p>Diameter: <strong>${result.diameter}</strong> sisi</p>
             <p>Jalur terpanjang dari simpul <strong>${result.from}</strong> ke simpul <strong>${result.to}</strong></p>
             <div class="path-display">${pathHtml}</div>
-            <p style="margin-top:16px;color:var(--text-muted);font-size:0.9rem">💡 Diameter adalah jarak terpanjang di antara semua pasangan simpul terpendek dalam graf.</p>
+            ${this.getResultNote('Diameter adalah jarak terpanjang di antara semua pasangan simpul terpendek dalam graf.')}
         `);
     }
 
@@ -1933,10 +2268,10 @@ class GraphVisualizer {
             const cycleHtml = result.cycle.map(n => `<span class="path-node" style="background:linear-gradient(135deg, #f5576c, #f093fb)">${n}</span>`).join('<span class="path-arrow">→</span>');
 
             this.showResultModal(`
-                <h3>🔄 Siklus Ditemukan!</h3>
+                ${this.getResultHeading('cycle', 'Siklus Ditemukan!')}
                 <p>Graf memiliki <strong>siklus</strong> dengan panjang <strong>${displayCycle.length}</strong> sisi.</p>
                 <div class="path-display">${cycleHtml}</div>
-                <p style="margin-top:16px;color:var(--text-muted);font-size:0.9rem">💡 Siklus adalah jalur tertutup yang dimulai dan berakhir di simpul yang sama tanpa mengulang sisi.</p>
+                ${this.getResultNote('Siklus adalah jalur tertutup yang dimulai dan berakhir di simpul yang sama tanpa mengulang sisi.')}
             `);
         } else {
             // No cycle - color all green
@@ -1947,10 +2282,10 @@ class GraphVisualizer {
             this.isAnimating = false;
 
             this.showResultModal(`
-                <h3>✅ Tidak Ada Siklus</h3>
+                ${this.getResultHeading('check-circle', 'Tidak Ada Siklus')}
                 <p>Graf ini <strong>tidak memiliki siklus</strong> (merupakan hutan/pohon).</p>
                 <p>Simpul: <strong>${this.graph.nodes.size}</strong> | Sisi: <strong>${this.graph.edges.length}</strong></p>
-                <p style="margin-top:12px;color:var(--text-muted);font-size:0.9rem">💡 Graf tanpa siklus disebut hutan. Jika terhubung, disebut pohon.</p>
+                ${this.getResultNote('Graf tanpa siklus disebut hutan. Jika terhubung, disebut pohon.')}
             `);
         }
     }
@@ -2006,9 +2341,9 @@ class GraphVisualizer {
             this.isAnimating = false;
 
             this.showResultModal(`
-                <h3>⭕ Girth Tidak Terdefinisi</h3>
+                ${this.getResultHeading('ring', 'Girth Tidak Terdefinisi')}
                 <p>Graf ini <strong>tidak memiliki siklus</strong>, sehingga girth = <strong>∞ (tak hingga)</strong>.</p>
-                <p style="margin-top:12px;color:var(--text-muted);font-size:0.9rem">💡 Girth adalah panjang siklus terpendek. Jika tidak ada siklus, girth tidak terdefinisi.</p>
+                ${this.getResultNote('Girth adalah panjang siklus terpendek. Jika tidak ada siklus, girth tidak terdefinisi.')}
             `);
         } else {
             // Animate the girth cycle
@@ -2059,11 +2394,11 @@ class GraphVisualizer {
             const cycleHtml = result.cycle.map(n => `<span class="path-node" style="background:linear-gradient(135deg, #43e97b, #38f9d7)">${n}</span>`).join('<span class="path-arrow">→</span>');
 
             this.showResultModal(`
-                <h3>⭕ Girth (Sabuk) Graf</h3>
+                ${this.getResultHeading('ring', 'Girth (Sabuk) Graf')}
                 <p>Girth: <strong>${result.girth}</strong> sisi</p>
                 <p>Siklus terpendek yang ditemukan:</p>
                 <div class="path-display">${cycleHtml}</div>
-                <p style="margin-top:16px;color:var(--text-muted);font-size:0.9rem">💡 Girth adalah panjang siklus terpendek dalam graf. Siklus di atas memiliki ${displayCycle.length} simpul dan ${result.girth} sisi.</p>
+                ${this.getResultNote(`Girth adalah panjang siklus terpendek dalam graf. Siklus di atas memiliki ${displayCycle.length} simpul dan ${result.girth} sisi.`)}
             `);
         }
     }
@@ -2145,6 +2480,166 @@ class GraphVisualizer {
             <p>Total bobot minimum: <strong>${this.formatWeight(result.totalWeight)}</strong></p>
             <p>Jumlah sisi terpilih: <strong>${result.edges.length}</strong></p>
             <div class="component-list">${edgeDetails || '<p>Graf hanya memiliki satu simpul, sehingga MST tidak memerlukan sisi.</p>'}</div>
+        `);
+    }
+
+    async runTSP(startNode) {
+        if (this.isAnimating) return;
+        if (this.graph.nodes.size === 0) {
+            this.showToast('Tidak ada simpul!', 'error');
+            return;
+        }
+
+        this.resetVisualization();
+        this.isAnimating = true;
+        this.electricNodes.clear();
+        this.electricEdges.clear();
+
+        const result = this.algorithms.solveTSPNearestNeighbor(startNode);
+        const delay = () => new Promise(resolve => setTimeout(resolve, this.animationSpeed));
+        const routeColor = '#fda085';
+        const startColor = '#4A7C59';
+
+        if (!result.hasTour) {
+            this.isAnimating = false;
+
+            let description = 'Tur TSP tidak dapat dibentuk dari graf saat ini.';
+            if (result.reason === 'unreachable-node') {
+                description = `Masih ada simpul yang tidak dapat dicapai dari simpul <strong>${result.failedFrom}</strong>.`;
+            } else if (result.reason === 'cannot-return-to-start') {
+                description = `Tur tidak bisa ditutup karena tidak ada rute kembali ke simpul awal <strong>${result.startNode}</strong> dari simpul <strong>${result.failedFrom}</strong>.`;
+            }
+
+            this.showResultModal(`
+                <h3>Travelling Salesman Problem (TSP)</h3>
+                <p>${description}</p>
+                ${this.getResultNote('Heuristik ini membutuhkan rute yang dapat mencapai semua simpul lalu kembali ke titik awal. Untuk graf directed, pastikan rutenya cukup kuat untuk membentuk tur tertutup.')}
+            `);
+            return;
+        }
+
+        this.nodeColors.set(startNode, startColor);
+        this.electricNodes.add(startNode);
+
+        const startData = this.graph.nodes.get(startNode);
+        if (startData) {
+            this.createShockwave(startData.x, startData.y, startColor);
+            for (let i = 0; i < 6; i++) {
+                this.createElectricParticle(startData.x, startData.y, startColor);
+            }
+        }
+
+        if (this.graph3DView && this.viewMode === '3d') {
+            this.graph3DView.highlightNode(startNode, 0x4A7C59);
+        }
+
+        if (result.visitOrder.length === 1) {
+            this.electricNodes.clear();
+            this.electricEdges.clear();
+            this.isAnimating = false;
+            this.showResultModal(`
+                <h3>Travelling Salesman Problem (TSP)</h3>
+                <p>Graf hanya memiliki satu simpul, jadi tur dimulai dan berakhir di simpul <strong>${startNode}</strong>.</p>
+                <p>Total bobot tur: <strong>0</strong></p>
+                <div class="path-display"><span class="path-node" style="background:linear-gradient(135deg, #4A7C59, #3a6b48)">${startNode}</span><span class="path-arrow">→</span><span class="path-node" style="background:linear-gradient(135deg, #4A7C59, #3a6b48)">${startNode}</span></div>
+            `);
+            return;
+        }
+
+        await delay();
+
+        for (let segmentIndex = 0; segmentIndex < result.segments.length; segmentIndex++) {
+            const segment = result.segments[segmentIndex];
+            const isClosingSegment = segmentIndex === result.segments.length - 1;
+
+            for (let i = 0; i < segment.path.length - 1; i++) {
+                const from = segment.path[i];
+                const to = segment.path[i + 1];
+                const fromData = this.graph.nodes.get(from);
+                const toData = this.graph.nodes.get(to);
+                const currentNodeColor = to === startNode && isClosingSegment ? startColor : routeColor;
+
+                this.edgeColors.set(`${from}-${to}`, routeColor);
+                if (!this.graph.directed) {
+                    this.edgeColors.set(`${to}-${from}`, routeColor);
+                }
+                this.electricEdges.add(`${from}-${to}`);
+
+                this.nodeColors.set(to, currentNodeColor);
+                this.electricNodes.add(to);
+
+                if (fromData && toData) {
+                    this.createLightningBolt(fromData.x, fromData.y, toData.x, toData.y, routeColor);
+                }
+                if (toData) {
+                    this.createShockwave(toData.x, toData.y, currentNodeColor);
+                    for (let j = 0; j < 5; j++) {
+                        this.createElectricParticle(toData.x, toData.y, currentNodeColor);
+                    }
+                }
+
+                if (this.graph3DView && this.viewMode === '3d') {
+                    this.graph3DView.highlightEdge(from, to, 0xfda085);
+                    this.graph3DView.highlightNode(to, to === startNode && isClosingSegment ? 0x4A7C59 : 0xfda085);
+                }
+
+                await delay();
+            }
+        }
+
+        this.nodeColors.set(startNode, startColor);
+        if (this.graph3DView && this.viewMode === '3d') {
+            this.graph3DView.highlightNode(startNode, 0x4A7C59);
+        }
+
+        setTimeout(() => {
+            this.electricNodes.clear();
+            this.electricEdges.clear();
+        }, 500);
+
+        this.isAnimating = false;
+
+        const cycleHtml = result.cycle.map((node, index) => {
+            const isStartMarker = index === 0 || index === result.cycle.length - 1;
+            const style = isStartMarker
+                ? 'background:linear-gradient(135deg, #4A7C59, #3a6b48)'
+                : 'background:linear-gradient(135deg, #fda085, #f6a55b)';
+            return `<span class="path-node" style="${style}">${node}</span>`;
+        }).join('<span class="path-arrow">→</span>');
+
+        const showExpandedRoute =
+            result.expandedPath.length !== result.cycle.length ||
+            result.expandedPath.some((node, index) => node !== result.cycle[index]);
+
+        const expandedHtml = showExpandedRoute
+            ? result.expandedPath.map((node, index) => {
+                const isStartMarker = index === 0 || index === result.expandedPath.length - 1;
+                const style = isStartMarker
+                    ? 'background:linear-gradient(135deg, #4A7C59, #3a6b48)'
+                    : 'background:linear-gradient(135deg, #fda085, #f6a55b)';
+                return `<span class="path-node" style="${style}">${node}</span>`;
+            }).join('<span class="path-arrow">→</span>')
+            : '';
+
+        const segmentDetails = result.segments.map((segment, index) => {
+            const dotColor = index === result.segments.length - 1 ? '#4A7C59' : routeColor;
+            return `<p><span class="color-dot" style="background:${dotColor}"></span>${segment.from} → ${segment.to} (biaya ${this.formatWeight(segment.distance)})</p>`;
+        }).join('');
+
+        const expansionNote = result.usesShortestPathExpansion
+            ? 'Beberapa langkah memakai ekspansi lintasan terpendek karena tidak semua perpindahan tersedia sebagai sisi langsung.'
+            : 'Semua langkah pada tur memakai sisi langsung yang tersedia di graf.';
+
+        this.showResultModal(`
+            <h3>Travelling Salesman Problem (TSP)</h3>
+            <p>Heuristik yang digunakan: <strong>${result.heuristic}</strong></p>
+            <p>Titik awal: <strong>${startNode}</strong></p>
+            <p>Total bobot tur: <strong>${this.formatWeight(result.totalWeight)}</strong></p>
+            <p>Simpul unik yang dikunjungi: <strong>${result.visitOrder.length}</strong></p>
+            <div class="path-display">${cycleHtml}</div>
+            ${showExpandedRoute ? `<p style="margin-top:16px">Rute aktual pada graf setelah ekspansi lintasan terpendek:</p><div class="path-display">${expandedHtml}</div>` : ''}
+            <div class="component-list">${segmentDetails}</div>
+            ${this.getResultNote(`${expansionNote} Ini adalah algoritma TSP sederhana berbasis nearest neighbor, jadi cepat tetapi tidak selalu optimal.`)}
         `);
     }
 
