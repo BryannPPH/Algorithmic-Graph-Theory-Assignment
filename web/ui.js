@@ -587,7 +587,11 @@ class GraphVisualizer {
         e.preventDefault();
 
         const screenPos = this.getScreenPos(e);
-        const zoomFactor = e.deltaY < 0 ? 1.1 : 1 / 1.1;
+        const deltaMultiplier =
+            e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.canvas.height : 1;
+        const normalizedDelta = e.deltaY * deltaMultiplier;
+        const zoomDelta = Math.max(-70, Math.min(70, normalizedDelta));
+        const zoomFactor = Math.exp(-zoomDelta * 0.0028);
         this.zoomAt(screenPos.x, screenPos.y, zoomFactor);
     }
 
@@ -2495,7 +2499,7 @@ class GraphVisualizer {
         this.electricNodes.clear();
         this.electricEdges.clear();
 
-        const result = this.algorithms.solveTSPNearestNeighbor(startNode);
+        const result = this.algorithms.solveTSPBruteForce(startNode);
         const delay = () => new Promise(resolve => setTimeout(resolve, this.animationSpeed));
         const routeColor = '#fda085';
         const startColor = '#4A7C59';
@@ -2504,16 +2508,16 @@ class GraphVisualizer {
             this.isAnimating = false;
 
             let description = 'Tur TSP tidak dapat dibentuk dari graf saat ini.';
-            if (result.reason === 'unreachable-node') {
-                description = `Masih ada simpul yang tidak dapat dicapai dari simpul <strong>${result.failedFrom}</strong>.`;
-            } else if (result.reason === 'cannot-return-to-start') {
-                description = `Tur tidak bisa ditutup karena tidak ada rute kembali ke simpul awal <strong>${result.startNode}</strong> dari simpul <strong>${result.failedFrom}</strong>.`;
+            if (result.reason === 'too-many-nodes') {
+                description = `Mode brute force dibatasi sampai <strong>${result.maxNodes}</strong> simpul agar aplikasi tidak membeku.`;
+            } else if (result.reason === 'no-hamiltonian-cycle') {
+                description = `Tidak ditemukan <strong>Hamiltonian cycle</strong> yang berawal di simpul <strong>${result.startNode}</strong>, mengunjungi setiap simpul tepat satu kali, lalu kembali ke titik awal.`;
             }
 
             this.showResultModal(`
                 <h3>Travelling Salesman Problem (TSP)</h3>
                 <p>${description}</p>
-                ${this.getResultNote('Heuristik ini membutuhkan rute yang dapat mencapai semua simpul lalu kembali ke titik awal. Untuk graf directed, pastikan rutenya cukup kuat untuk membentuk tur tertutup.')}
+                ${this.getResultNote('Versi ini memakai brute force exact pada sisi asli graf. Jadi perpindahan antar simpul harus tersedia sebagai sisi langsung, dan waktu komputasinya naik sangat cepat ketika jumlah simpul bertambah.')}
             `);
             return;
         }
@@ -2607,39 +2611,19 @@ class GraphVisualizer {
             return `<span class="path-node" style="${style}">${node}</span>`;
         }).join('<span class="path-arrow">→</span>');
 
-        const showExpandedRoute =
-            result.expandedPath.length !== result.cycle.length ||
-            result.expandedPath.some((node, index) => node !== result.cycle[index]);
-
-        const expandedHtml = showExpandedRoute
-            ? result.expandedPath.map((node, index) => {
-                const isStartMarker = index === 0 || index === result.expandedPath.length - 1;
-                const style = isStartMarker
-                    ? 'background:linear-gradient(135deg, #4A7C59, #3a6b48)'
-                    : 'background:linear-gradient(135deg, #fda085, #f6a55b)';
-                return `<span class="path-node" style="${style}">${node}</span>`;
-            }).join('<span class="path-arrow">→</span>')
-            : '';
-
         const segmentDetails = result.segments.map((segment, index) => {
             const dotColor = index === result.segments.length - 1 ? '#4A7C59' : routeColor;
             return `<p><span class="color-dot" style="background:${dotColor}"></span>${segment.from} → ${segment.to} (biaya ${this.formatWeight(segment.distance)})</p>`;
         }).join('');
 
-        const expansionNote = result.usesShortestPathExpansion
-            ? 'Beberapa langkah memakai ekspansi lintasan terpendek karena tidak semua perpindahan tersedia sebagai sisi langsung.'
-            : 'Semua langkah pada tur memakai sisi langsung yang tersedia di graf.';
-
         this.showResultModal(`
             <h3>Travelling Salesman Problem (TSP)</h3>
-            <p>Heuristik yang digunakan: <strong>${result.heuristic}</strong></p>
             <p>Titik awal: <strong>${startNode}</strong></p>
             <p>Total bobot tur: <strong>${this.formatWeight(result.totalWeight)}</strong></p>
             <p>Simpul unik yang dikunjungi: <strong>${result.visitOrder.length}</strong></p>
             <div class="path-display">${cycleHtml}</div>
-            ${showExpandedRoute ? `<p style="margin-top:16px">Rute aktual pada graf setelah ekspansi lintasan terpendek:</p><div class="path-display">${expandedHtml}</div>` : ''}
             <div class="component-list">${segmentDetails}</div>
-            ${this.getResultNote(`${expansionNote} Ini adalah algoritma TSP sederhana berbasis nearest neighbor, jadi cepat tetapi tidak selalu optimal.`)}
+            ${this.getResultNote('Tur di atas adalah solusi exact terbaik yang ditemukan dengan tsp.')}
         `);
     }
 

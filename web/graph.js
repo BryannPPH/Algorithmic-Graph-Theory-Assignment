@@ -473,20 +473,22 @@ class GraphAlgorithms {
         return { distance: dist.get(endNode), path };
     }
 
-    solveTSPNearestNeighbor(startNode) {
+    solveTSPBruteForce(startNode) {
         const nodes = Array.from(this.graph.nodes.keys()).sort((a, b) => a - b);
+        const algorithmName = 'Brute Force (Exact)';
+
         if (!this.graph.nodes.has(startNode)) {
             return {
                 hasTour: false,
                 reason: 'start-node-not-found',
-                heuristic: 'Nearest Neighbor'
+                algorithm: algorithmName
             };
         }
 
         if (nodes.length === 0) {
             return {
                 hasTour: true,
-                heuristic: 'Nearest Neighbor',
+                algorithm: algorithmName,
                 startNode: null,
                 visitOrder: [],
                 cycle: [],
@@ -500,7 +502,7 @@ class GraphAlgorithms {
         if (nodes.length === 1) {
             return {
                 hasTour: true,
-                heuristic: 'Nearest Neighbor',
+                algorithm: algorithmName,
                 startNode,
                 visitOrder: [startNode],
                 cycle: [startNode, startNode],
@@ -511,100 +513,107 @@ class GraphAlgorithms {
             };
         }
 
-        const pathCache = new Map();
-        const getShortestPath = (from, to) => {
-            const key = `${from}->${to}`;
-            if (!pathCache.has(key)) {
-                pathCache.set(key, this.shortestPathWeightedSync(from, to));
-            }
-            return pathCache.get(key);
-        };
-
-        const unvisited = new Set(nodes.filter(node => node !== startNode));
-        const visitOrder = [startNode];
-        const segments = [];
-
-        let current = startNode;
-        while (unvisited.size > 0) {
-            let bestCandidate = null;
-            let bestResult = null;
-
-            for (const candidate of unvisited) {
-                const result = getShortestPath(current, candidate);
-                if (result.distance === Infinity) continue;
-
-                if (
-                    bestCandidate === null ||
-                    result.distance < bestResult.distance ||
-                    (result.distance === bestResult.distance && candidate < bestCandidate)
-                ) {
-                    bestCandidate = candidate;
-                    bestResult = result;
-                }
-            }
-
-            if (bestCandidate === null) {
-                return {
-                    hasTour: false,
-                    reason: 'unreachable-node',
-                    failedFrom: current,
-                    remainingNodes: Array.from(unvisited).sort((a, b) => a - b),
-                    heuristic: 'Nearest Neighbor'
-                };
-            }
-
-            segments.push({
-                from: current,
-                to: bestCandidate,
-                distance: bestResult.distance,
-                path: bestResult.path.slice()
-            });
-
-            current = bestCandidate;
-            visitOrder.push(bestCandidate);
-            unvisited.delete(bestCandidate);
-        }
-
-        const returnToStart = getShortestPath(current, startNode);
-        if (returnToStart.distance === Infinity) {
+        const maxBruteForceNodes = 11;
+        if (nodes.length > maxBruteForceNodes) {
             return {
                 hasTour: false,
-                reason: 'cannot-return-to-start',
-                failedFrom: current,
-                startNode,
-                heuristic: 'Nearest Neighbor'
+                reason: 'too-many-nodes',
+                maxNodes: maxBruteForceNodes,
+                algorithm: algorithmName
             };
         }
 
-        segments.push({
-            from: current,
-            to: startNode,
-            distance: returnToStart.distance,
-            path: returnToStart.path.slice()
-        });
-
-        const expandedPath = [startNode];
-        let totalWeight = 0;
-        let usesShortestPathExpansion = false;
-
-        for (const segment of segments) {
-            totalWeight += segment.distance;
-            if (segment.path.length > 2) {
-                usesShortestPathExpansion = true;
+        const weightCache = new Map();
+        const getDirectWeight = (from, to) => {
+            const key = `${from}->${to}`;
+            if (!weightCache.has(key)) {
+                weightCache.set(key, this.graph.getEdgeWeight(from, to));
             }
-            expandedPath.push(...segment.path.slice(1));
+            return weightCache.get(key);
+        };
+
+        const isLexicographicallySmaller = (candidate, currentBest) => {
+            if (!currentBest) return true;
+            for (let i = 0; i < candidate.length; i++) {
+                if (candidate[i] < currentBest[i]) return true;
+                if (candidate[i] > currentBest[i]) return false;
+            }
+            return false;
+        };
+
+        const remainingNodes = nodes.filter(node => node !== startNode);
+        let bestCycle = null;
+        let bestVisitOrder = null;
+        let bestWeight = Infinity;
+
+        const search = (currentNode, unvisited, visitOrder, totalWeight) => {
+            if (unvisited.length === 0) {
+                const backWeight = getDirectWeight(currentNode, startNode);
+                if (backWeight === null) return;
+
+                const cycle = [...visitOrder, startNode];
+                const candidateWeight = totalWeight + backWeight;
+                if (
+                    candidateWeight < bestWeight ||
+                    (candidateWeight === bestWeight && isLexicographicallySmaller(cycle, bestCycle))
+                ) {
+                    bestWeight = candidateWeight;
+                    bestVisitOrder = visitOrder.slice();
+                    bestCycle = cycle;
+                }
+                return;
+            }
+
+            for (let i = 0; i < unvisited.length; i++) {
+                const nextNode = unvisited[i];
+                const edgeWeight = getDirectWeight(currentNode, nextNode);
+                if (edgeWeight === null) continue;
+
+                const nextWeight = totalWeight + edgeWeight;
+                if (nextWeight > bestWeight) continue;
+
+                const nextUnvisited = unvisited.slice(0, i).concat(unvisited.slice(i + 1));
+                visitOrder.push(nextNode);
+                search(nextNode, nextUnvisited, visitOrder, nextWeight);
+                visitOrder.pop();
+            }
+        };
+
+        search(startNode, remainingNodes, [startNode], 0);
+
+        if (!bestCycle || !bestVisitOrder) {
+            return {
+                hasTour: false,
+                reason: 'no-hamiltonian-cycle',
+                startNode,
+                algorithm: algorithmName
+            };
+        }
+
+        const segments = [];
+        for (let i = 0; i < bestCycle.length - 1; i++) {
+            const from = bestCycle[i];
+            const to = bestCycle[i + 1];
+            const distance = getDirectWeight(from, to);
+
+            segments.push({
+                from,
+                to,
+                distance,
+                path: [from, to]
+            });
         }
 
         return {
             hasTour: true,
-            heuristic: 'Nearest Neighbor',
+            algorithm: algorithmName,
             startNode,
-            visitOrder,
-            cycle: [...visitOrder, startNode],
-            expandedPath,
+            visitOrder: bestVisitOrder,
+            cycle: bestCycle,
+            expandedPath: bestCycle.slice(),
             segments,
-            totalWeight,
-            usesShortestPathExpansion
+            totalWeight: bestWeight,
+            usesShortestPathExpansion: false
         };
     }
 

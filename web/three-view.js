@@ -198,7 +198,11 @@ class Graph3DView {
 
         this.renderer.domElement.addEventListener('wheel', (e) => {
             e.preventDefault();
-            this.spherical.radius = Math.max(20, Math.min(150, this.spherical.radius + e.deltaY * 0.05));
+            const deltaMultiplier =
+                e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.renderer.domElement.clientHeight : 1;
+            const normalizedDelta = e.deltaY * deltaMultiplier;
+            const zoomDelta = Math.max(-100, Math.min(100, normalizedDelta));
+            this.spherical.radius = Math.max(20, Math.min(150, this.spherical.radius + zoomDelta * 0.035));
             updateCameraPosition();
         });
 
@@ -679,7 +683,11 @@ class Island3DView {
         
         this.renderer.domElement.addEventListener('wheel', (e) => {
             e.preventDefault();
-            this.spherical.radius = Math.max(30, Math.min(150, this.spherical.radius + e.deltaY * 0.05));
+            const deltaMultiplier =
+                e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? this.renderer.domElement.clientHeight : 1;
+            const normalizedDelta = e.deltaY * deltaMultiplier;
+            const zoomDelta = Math.max(-100, Math.min(100, normalizedDelta));
+            this.spherical.radius = Math.max(30, Math.min(150, this.spherical.radius + zoomDelta * 0.035));
             updateCameraPosition();
         });
 
