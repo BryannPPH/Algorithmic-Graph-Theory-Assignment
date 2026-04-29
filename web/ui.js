@@ -772,6 +772,502 @@ class GraphVisualizer {
         this.canvas.style.cursor = 'default';
     }
 
+    setupGraphPresetEvents() {
+        const presetSelect = document.getElementById('graphPresetSelect');
+        const loadButton = document.getElementById('loadPresetGraph');
+        if (!presetSelect || !loadButton) return;
+
+        presetSelect.onchange = () => this.updateGraphPresetForm();
+        loadButton.onclick = () => this.loadSelectedGraphPreset();
+        this.updateGraphPresetForm();
+    }
+
+    getGraphPresetDefinitions() {
+        return {
+            complete: {
+                hint: 'K_n lengkap dengan setiap pasangan simpul terhubung.',
+                params: { n: { label: 'n', value: 6, min: 2 } }
+            },
+            completeBipartite: {
+                hint: 'K_m,n lengkap bipartit dengan sisi dari setiap simpul partisi kiri ke partisi kanan.',
+                params: {
+                    m: { label: 'm', value: 3, min: 1 },
+                    n: { label: 'n', value: 3, min: 1 }
+                }
+            },
+            tree: {
+                hint: 'T_n dibuat sebagai pohon biner kecil; biasanya tidak punya tur Hamiltonian.',
+                params: { n: { label: 'n', value: 8, min: 2 } }
+            },
+            cycle: {
+                hint: 'C_n adalah siklus sederhana dengan n simpul.',
+                params: { n: { label: 'n', value: 8, min: 3 } }
+            },
+            path: {
+                hint: 'P_n adalah lintasan sederhana; berguna untuk test kasus tanpa tur.',
+                params: { n: { label: 'n', value: 8, min: 2 } }
+            },
+            wheel: {
+                hint: 'W_n memakai n simpul total: satu pusat dan C_(n-1).',
+                params: { n: { label: 'n', value: 7, min: 4 } }
+            },
+            prism: {
+                hint: 'Prisma n-gonal memiliki 2n simpul.',
+                params: { n: { label: 'n', value: 5, min: 3 } }
+            },
+            petersen: {
+                hint: 'Petersen graph standar memiliki 10 simpul.'
+            },
+            generalizedPetersen: {
+                hint: 'P(n,k) memiliki 2n simpul; gunakan 1 <= k < n/2.',
+                params: {
+                    n: { label: 'n', value: 5, min: 3 },
+                    k: { label: 'k', value: 2, min: 1 }
+                }
+            },
+            circulant: {
+                hint: 'C_n(a1,a2) menghubungkan tiap simpul ke +/-a1 dan +/-a2.',
+                params: {
+                    n: { label: 'n', value: 8, min: 4 },
+                    a1: { label: 'a1', value: 1, min: 1 },
+                    a2: { label: 'a2', value: 3, min: 1 }
+                }
+            },
+            hypercube: {
+                hint: 'H(n) memiliki 2^n simpul.',
+                params: { n: { label: 'n', value: 3, min: 1 } }
+            },
+            grid: {
+                hint: 'G(m,n) memakai m baris dan n kolom.',
+                params: {
+                    m: { label: 'm', value: 2, min: 1 },
+                    n: { label: 'n', value: 5, min: 1 }
+                }
+            }
+        };
+    }
+
+    updateGraphPresetForm() {
+        const presetSelect = document.getElementById('graphPresetSelect');
+        if (!presetSelect) return;
+
+        const definitions = this.getGraphPresetDefinitions();
+        const definition = definitions[presetSelect.value] || definitions.complete;
+        const params = definition.params || {};
+        const paramContainer = document.querySelector('.preset-params');
+        const paramIds = ['n', 'm', 'k', 'a1', 'a2'];
+
+        for (const paramId of paramIds) {
+            const field = document.querySelector(`.preset-field[data-param="${paramId}"]`);
+            const input = document.getElementById(`preset${paramId.toUpperCase()}`);
+            const label = document.getElementById(`preset${paramId.toUpperCase()}Label`);
+            if (!field || !input || !label) continue;
+
+            const config = params[paramId];
+            field.hidden = !config;
+
+            if (config) {
+                label.textContent = config.label;
+                input.min = config.min;
+                if (Number.isFinite(config.max)) {
+                    input.max = config.max;
+                } else {
+                    input.removeAttribute('max');
+                }
+                input.value = config.value;
+            }
+        }
+
+        if (paramContainer) {
+            paramContainer.hidden = Object.keys(params).length === 0;
+        }
+
+        const hint = document.getElementById('presetHint');
+        if (hint) {
+            hint.textContent = definition.hint || '';
+        }
+    }
+
+    loadSelectedGraphPreset() {
+        const presetSelect = document.getElementById('graphPresetSelect');
+        if (!presetSelect) return;
+
+        try {
+            const definitions = this.getGraphPresetDefinitions();
+            const definition = definitions[presetSelect.value] || definitions.complete;
+            const params = this.readGraphPresetParams(definition);
+            const preset = this.buildGraphPreset(presetSelect.value, params);
+
+            if (this.graph.nodes.size > 0 && !confirm('Ganti graf saat ini dengan test case baru?')) {
+                return;
+            }
+
+            this.applyGraphPreset(preset);
+            this.showToast(`${preset.name} dimuat: ${preset.nodes.length} simpul, ${preset.edges.length} sisi`, 'success');
+        } catch (error) {
+            this.showToast(error.message || 'Gagal memuat test case graf.', 'error');
+        }
+    }
+
+    readGraphPresetParams(definition) {
+        const params = {};
+        const paramConfig = definition.params || {};
+
+        for (const [paramName, config] of Object.entries(paramConfig)) {
+            const input = document.getElementById(`preset${paramName.toUpperCase()}`);
+            const value = Number.parseInt(input ? input.value : config.value, 10);
+
+            if (!Number.isInteger(value)) {
+                throw new Error(`Parameter ${config.label} harus berupa bilangan bulat.`);
+            }
+
+            if (value < config.min || (Number.isFinite(config.max) && value > config.max)) {
+                const rangeText = Number.isFinite(config.max)
+                    ? `di antara ${config.min} dan ${config.max}`
+                    : `minimal ${config.min}`;
+                throw new Error(`Parameter ${config.label} harus ${rangeText}.`);
+            }
+
+            if (input) input.value = value;
+            params[paramName] = value;
+        }
+
+        return params;
+    }
+
+    applyGraphPreset(preset) {
+        this.graph.clear();
+        this.graph.setDirected(false);
+        this.resetVisualization();
+        this.viewport.scale = 1;
+        this.viewport.offsetX = 0;
+        this.viewport.offsetY = 0;
+
+        document.getElementById('undirectedBtn').classList.add('active');
+        document.getElementById('directedBtn').classList.remove('active');
+
+        const idByIndex = preset.nodes.map((node) => this.graph.addNode(node.x, node.y));
+        for (const [fromIndex, toIndex, weight = 1] of preset.edges) {
+            this.graph.addEdge(idByIndex[fromIndex], idByIndex[toIndex], weight);
+        }
+
+        this.updateStats();
+        this.update3DView();
+    }
+
+    buildGraphPreset(type, params) {
+        switch (type) {
+            case 'complete':
+                return this.buildCompleteGraphPreset(params.n);
+            case 'completeBipartite':
+                return this.buildCompleteBipartiteGraphPreset(params.m, params.n);
+            case 'tree':
+                return this.buildTreeGraphPreset(params.n);
+            case 'cycle':
+                return this.buildCycleGraphPreset(params.n);
+            case 'path':
+                return this.buildPathGraphPreset(params.n);
+            case 'wheel':
+                return this.buildWheelGraphPreset(params.n);
+            case 'prism':
+                return this.buildPrismGraphPreset(params.n);
+            case 'petersen':
+                return this.buildGeneralizedPetersenGraphPreset(5, 2, 'Petersen graph');
+            case 'generalizedPetersen':
+                return this.buildGeneralizedPetersenGraphPreset(params.n, params.k, `Generalized Petersen P(${params.n},${params.k})`);
+            case 'circulant':
+                return this.buildCirculantGraphPreset(params.n, params.a1, params.a2);
+            case 'hypercube':
+                return this.buildHypercubeGraphPreset(params.n);
+            case 'grid':
+                return this.buildGridGraphPreset(params.m, params.n);
+            default:
+                return this.buildCompleteGraphPreset(6);
+        }
+    }
+
+    getPresetFrame() {
+        const width = Math.max(360, this.canvas.width || this.canvasContainer.clientWidth || 800);
+        const height = Math.max(320, this.canvas.height || this.canvasContainer.clientHeight || 520);
+
+        return {
+            width,
+            height,
+            centerX: width / 2,
+            centerY: height / 2,
+            radius: Math.max(92, Math.min(width, height) * 0.31)
+        };
+    }
+
+    createCirclePresetNodes(count, radiusFactor = 1, startAngle = -Math.PI / 2) {
+        const frame = this.getPresetFrame();
+        const radius = frame.radius * radiusFactor;
+
+        return Array.from({ length: count }, (_, index) => {
+            const angle = startAngle + (index / count) * Math.PI * 2;
+            return {
+                x: frame.centerX + Math.cos(angle) * radius,
+                y: frame.centerY + Math.sin(angle) * radius
+            };
+        });
+    }
+
+    createPresetEdgeCollector() {
+        const edges = [];
+        const seen = new Set();
+
+        const add = (from, to, weight = 1) => {
+            if (from === to) return;
+            const a = Math.min(from, to);
+            const b = Math.max(from, to);
+            const key = `${a}-${b}`;
+            if (seen.has(key)) return;
+            seen.add(key);
+            edges.push([from, to, weight]);
+        };
+
+        return { edges, add };
+    }
+
+    buildCompleteGraphPreset(n) {
+        const nodes = this.createCirclePresetNodes(n);
+        const { edges, add } = this.createPresetEdgeCollector();
+
+        for (let i = 0; i < n; i++) {
+            for (let j = i + 1; j < n; j++) {
+                add(i, j);
+            }
+        }
+
+        return { name: `Graf lengkap K_${n}`, nodes, edges };
+    }
+
+    buildCompleteBipartiteGraphPreset(m, n) {
+        const frame = this.getPresetFrame();
+        const leftX = frame.centerX - Math.min(frame.width * 0.22, 180);
+        const rightX = frame.centerX + Math.min(frame.width * 0.22, 180);
+        const makeColumn = (count, x) => {
+            const spacing = Math.min(82, (frame.height * 0.56) / Math.max(1, count - 1));
+            return Array.from({ length: count }, (_, index) => ({
+                x,
+                y: frame.centerY + (index - (count - 1) / 2) * spacing
+            }));
+        };
+        const nodes = [...makeColumn(m, leftX), ...makeColumn(n, rightX)];
+        const { edges, add } = this.createPresetEdgeCollector();
+
+        for (let i = 0; i < m; i++) {
+            for (let j = 0; j < n; j++) {
+                add(i, m + j);
+            }
+        }
+
+        return { name: `Graf bipartit lengkap K_${m},${n}`, nodes, edges };
+    }
+
+    buildTreeGraphPreset(n) {
+        const frame = this.getPresetFrame();
+        const maxLevel = Math.floor(Math.log2(Math.max(1, n)));
+        const top = frame.centerY - Math.min(frame.height * 0.27, 165);
+        const ySpacing = maxLevel === 0 ? 0 : Math.min(105, (frame.height * 0.54) / maxLevel);
+        const nodes = [];
+        const { edges, add } = this.createPresetEdgeCollector();
+
+        for (let index = 0; index < n; index++) {
+            const level = Math.floor(Math.log2(index + 1));
+            const firstIndexInLevel = (1 << level) - 1;
+            const nodesOnLevel = Math.min(1 << level, n - firstIndexInLevel);
+            const indexInLevel = index - firstIndexInLevel;
+            const xSpacing = Math.min(120, (frame.width * 0.62) / Math.max(1, nodesOnLevel - 1));
+
+            nodes.push({
+                x: frame.centerX + (indexInLevel - (nodesOnLevel - 1) / 2) * xSpacing,
+                y: top + level * ySpacing
+            });
+
+            if (index > 0) {
+                add(Math.floor((index - 1) / 2), index);
+            }
+        }
+
+        return { name: `Pohon T_${n}`, nodes, edges };
+    }
+
+    buildCycleGraphPreset(n) {
+        const nodes = this.createCirclePresetNodes(n);
+        const { edges, add } = this.createPresetEdgeCollector();
+
+        for (let i = 0; i < n; i++) {
+            add(i, (i + 1) % n);
+        }
+
+        return { name: `Siklus C_${n}`, nodes, edges };
+    }
+
+    buildPathGraphPreset(n) {
+        const frame = this.getPresetFrame();
+        const span = Math.min(frame.width * 0.68, 560);
+        const nodes = Array.from({ length: n }, (_, index) => ({
+            x: frame.centerX + (index - (n - 1) / 2) * (span / Math.max(1, n - 1)),
+            y: frame.centerY
+        }));
+        const { edges, add } = this.createPresetEdgeCollector();
+
+        for (let i = 0; i < n - 1; i++) {
+            add(i, i + 1);
+        }
+
+        return { name: `Lintasan P_${n}`, nodes, edges };
+    }
+
+    buildWheelGraphPreset(n) {
+        const frame = this.getPresetFrame();
+        const outerCount = n - 1;
+        const nodes = [
+            { x: frame.centerX, y: frame.centerY },
+            ...this.createCirclePresetNodes(outerCount)
+        ];
+        const { edges, add } = this.createPresetEdgeCollector();
+
+        for (let i = 1; i <= outerCount; i++) {
+            add(0, i);
+            add(i, i === outerCount ? 1 : i + 1);
+        }
+
+        return { name: `Graf roda W_${n}`, nodes, edges };
+    }
+
+    buildPrismGraphPreset(n) {
+        const frame = this.getPresetFrame();
+        const radiusX = Math.min(frame.width * 0.23, 170);
+        const radiusY = Math.min(frame.height * 0.13, 72);
+        const verticalOffset = Math.min(frame.height * 0.14, 78);
+        const nodes = [];
+        const { edges, add } = this.createPresetEdgeCollector();
+
+        for (let layer = 0; layer < 2; layer++) {
+            const yOffset = layer === 0 ? -verticalOffset : verticalOffset;
+            for (let i = 0; i < n; i++) {
+                const angle = -Math.PI / 2 + (i / n) * Math.PI * 2;
+                nodes.push({
+                    x: frame.centerX + Math.cos(angle) * radiusX,
+                    y: frame.centerY + yOffset + Math.sin(angle) * radiusY
+                });
+            }
+        }
+
+        for (let i = 0; i < n; i++) {
+            add(i, (i + 1) % n);
+            add(n + i, n + ((i + 1) % n));
+            add(i, n + i);
+        }
+
+        return { name: `Graf prisma ${n}-gonal`, nodes, edges };
+    }
+
+    buildGeneralizedPetersenGraphPreset(n, k, name) {
+        if (k < 1 || k >= n / 2) {
+            throw new Error('Parameter k untuk P(n,k) harus memenuhi 1 <= k < n/2.');
+        }
+
+        const outerNodes = this.createCirclePresetNodes(n, 1);
+        const innerNodes = this.createCirclePresetNodes(n, 0.46);
+        const nodes = [...outerNodes, ...innerNodes];
+        const { edges, add } = this.createPresetEdgeCollector();
+
+        for (let i = 0; i < n; i++) {
+            add(i, (i + 1) % n);
+            add(i, n + i);
+            add(n + i, n + ((i + k) % n));
+        }
+
+        return { name, nodes, edges };
+    }
+
+    buildCirculantGraphPreset(n, a1, a2) {
+        const maxStep = Math.floor(n / 2);
+
+        if (a1 === a2) {
+            throw new Error('Parameter a1 dan a2 harus berbeda.');
+        }
+        if (a1 < 1 || a2 < 1 || a1 > maxStep || a2 > maxStep) {
+            throw new Error(`Parameter a1 dan a2 harus di antara 1 dan ${maxStep}.`);
+        }
+
+        const nodes = this.createCirclePresetNodes(n);
+        const { edges, add } = this.createPresetEdgeCollector();
+
+        for (let i = 0; i < n; i++) {
+            add(i, (i + a1) % n);
+            add(i, (i + a2) % n);
+        }
+
+        return { name: `Circulant graph C_${n}(${a1},${a2})`, nodes, edges };
+    }
+
+    buildHypercubeGraphPreset(dimension) {
+        const nodeCount = 1 << dimension;
+        const frame = this.getPresetFrame();
+        let nodes;
+
+        if (dimension === 1) {
+            nodes = [
+                { x: frame.centerX - 125, y: frame.centerY },
+                { x: frame.centerX + 125, y: frame.centerY }
+            ];
+        } else if (dimension === 2) {
+            nodes = Array.from({ length: nodeCount }, (_, index) => ({
+                x: frame.centerX + ((index & 1) ? 1 : -1) * 130,
+                y: frame.centerY + ((index & 2) ? 1 : -1) * 100
+            }));
+        } else {
+            nodes = Array.from({ length: nodeCount }, (_, index) => ({
+                x: frame.centerX + ((index & 1) ? 1 : -1) * 125 + ((index & 4) ? 1 : -1) * 48,
+                y: frame.centerY + ((index & 2) ? 1 : -1) * 88 + ((index & 4) ? 1 : -1) * 48
+            }));
+        }
+
+        const { edges, add } = this.createPresetEdgeCollector();
+        for (let node = 0; node < nodeCount; node++) {
+            for (let bit = 0; bit < dimension; bit++) {
+                const neighbor = node ^ (1 << bit);
+                if (node < neighbor) {
+                    add(node, neighbor);
+                }
+            }
+        }
+
+        return { name: `Hypercube H(${dimension})`, nodes, edges };
+    }
+
+    buildGridGraphPreset(rows, cols) {
+        const nodeCount = rows * cols;
+        const frame = this.getPresetFrame();
+        const spacingX = Math.min(92, (frame.width * 0.62) / Math.max(1, cols - 1));
+        const spacingY = Math.min(82, (frame.height * 0.54) / Math.max(1, rows - 1));
+        const nodes = [];
+        const { edges, add } = this.createPresetEdgeCollector();
+
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                nodes.push({
+                    x: frame.centerX + (col - (cols - 1) / 2) * spacingX,
+                    y: frame.centerY + (row - (rows - 1) / 2) * spacingY
+                });
+            }
+        }
+
+        for (let row = 0; row < rows; row++) {
+            for (let col = 0; col < cols; col++) {
+                const index = row * cols + col;
+                if (col + 1 < cols) add(index, index + 1);
+                if (row + 1 < rows) add(index, index + cols);
+            }
+        }
+
+        return { name: `Grid graph G(${rows},${cols})`, nodes, edges };
+    }
+
     setupUIEvents() {
         // Graph type buttons
         document.getElementById('undirectedBtn').onclick = () => {
@@ -789,6 +1285,8 @@ class GraphVisualizer {
             this.showToast('Mode: Directed', 'info');
             this.update3DView();
         };
+
+        this.setupGraphPresetEvents();
 
         // Tool buttons
         const tools = ['addNodeTool', 'addEdgeTool', 'moveTool', 'deleteTool', 'weightTool'];
@@ -2503,6 +3001,7 @@ class GraphVisualizer {
         const delay = () => new Promise(resolve => setTimeout(resolve, this.animationSpeed));
         const routeColor = '#fda085';
         const startColor = '#4A7C59';
+        const iterationCount = Number(result.iterations ?? 0).toLocaleString('id-ID');
 
         if (!result.hasTour) {
             this.isAnimating = false;
@@ -2517,7 +3016,8 @@ class GraphVisualizer {
             this.showResultModal(`
                 <h3>Travelling Salesman Problem (TSP)</h3>
                 <p>${description}</p>
-                ${this.getResultNote('Versi ini memakai brute force exact pada sisi asli graf. Jadi perpindahan antar simpul harus tersedia sebagai sisi langsung, dan waktu komputasinya naik sangat cepat ketika jumlah simpul bertambah.')}
+                <p>Jumlah iterasi pencarian: <strong>${iterationCount}</strong></p>
+                ${this.getResultNote('Versi ini memakai brute force exact pada sisi asli graf. Satu iterasi dihitung setiap kali satu state rekursif diperiksa.')}
             `);
             return;
         }
@@ -2545,6 +3045,7 @@ class GraphVisualizer {
                 <h3>Travelling Salesman Problem (TSP)</h3>
                 <p>Graf hanya memiliki satu simpul, jadi tur dimulai dan berakhir di simpul <strong>${startNode}</strong>.</p>
                 <p>Total bobot tur: <strong>0</strong></p>
+                <p>Jumlah iterasi pencarian: <strong>${iterationCount}</strong></p>
                 <div class="path-display"><span class="path-node" style="background:linear-gradient(135deg, #4A7C59, #3a6b48)">${startNode}</span><span class="path-arrow">→</span><span class="path-node" style="background:linear-gradient(135deg, #4A7C59, #3a6b48)">${startNode}</span></div>
             `);
             return;
@@ -2621,9 +3122,10 @@ class GraphVisualizer {
             <p>Titik awal: <strong>${startNode}</strong></p>
             <p>Total bobot tur: <strong>${this.formatWeight(result.totalWeight)}</strong></p>
             <p>Simpul unik yang dikunjungi: <strong>${result.visitOrder.length}</strong></p>
+            <p>Jumlah iterasi pencarian: <strong>${iterationCount}</strong></p>
             <div class="path-display">${cycleHtml}</div>
             <div class="component-list">${segmentDetails}</div>
-            ${this.getResultNote('Tur di atas adalah solusi exact terbaik yang ditemukan dengan tsp.')}
+            ${this.getResultNote('Tur di atas adalah solusi exact terbaik yang ditemukan dengan brute force. Satu iterasi dihitung setiap kali satu state rekursif diperiksa.')}
         `);
     }
 

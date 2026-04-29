@@ -481,7 +481,8 @@ class GraphAlgorithms {
             return {
                 hasTour: false,
                 reason: 'start-node-not-found',
-                algorithm: algorithmName
+                algorithm: algorithmName,
+                iterations: 0
             };
         }
 
@@ -495,7 +496,8 @@ class GraphAlgorithms {
                 expandedPath: [],
                 segments: [],
                 totalWeight: 0,
-                usesShortestPathExpansion: false
+                usesShortestPathExpansion: false,
+                iterations: 0
             };
         }
 
@@ -509,7 +511,8 @@ class GraphAlgorithms {
                 expandedPath: [startNode, startNode],
                 segments: [{ from: startNode, to: startNode, distance: 0, path: [startNode, startNode] }],
                 totalWeight: 0,
-                usesShortestPathExpansion: false
+                usesShortestPathExpansion: false,
+                iterations: 1
             };
         }
 
@@ -519,7 +522,8 @@ class GraphAlgorithms {
                 hasTour: false,
                 reason: 'too-many-nodes',
                 maxNodes: maxBruteForceNodes,
-                algorithm: algorithmName
+                algorithm: algorithmName,
+                iterations: 0
             };
         }
 
@@ -545,8 +549,11 @@ class GraphAlgorithms {
         let bestCycle = null;
         let bestVisitOrder = null;
         let bestWeight = Infinity;
+        let iterations = 0;
 
         const search = (currentNode, unvisited, visitOrder, totalWeight) => {
+            iterations++;
+
             if (unvisited.length === 0) {
                 const backWeight = getDirectWeight(currentNode, startNode);
                 if (backWeight === null) return;
@@ -586,7 +593,8 @@ class GraphAlgorithms {
                 hasTour: false,
                 reason: 'no-hamiltonian-cycle',
                 startNode,
-                algorithm: algorithmName
+                algorithm: algorithmName,
+                iterations
             };
         }
 
@@ -613,7 +621,8 @@ class GraphAlgorithms {
             expandedPath: bestCycle.slice(),
             segments,
             totalWeight: bestWeight,
-            usesShortestPathExpansion: false
+            usesShortestPathExpansion: false,
+            iterations
         };
     }
 

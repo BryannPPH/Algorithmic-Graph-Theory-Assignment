@@ -1,0 +1,150 @@
+.tsp-app {
+    min-width: 0;
+}
+
+.tsp-sidebar {
+    width: 292px;
+}
+
+.tsp-tools-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.tsp-tools-grid .tool-btn {
+    min-height: 98px;
+    padding: 16px 8px;
+}
+
+.tsp-run-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    border: none;
+    cursor: pointer;
+}
+
+.tsp-speed-control {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 14px;
+    border-top: 1px solid var(--border);
+}
+
+.tsp-speed-header,
+.tsp-speed-labels {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.tsp-speed-header label {
+    color: var(--text-secondary);
+    font-size: 0.86rem;
+    font-weight: 700;
+}
+
+#tspSpeedValue {
+    color: var(--accent);
+    font-size: 0.88rem;
+    font-weight: 800;
+}
+
+#tspSpeedSlider {
+    width: 100%;
+    accent-color: var(--accent);
+    cursor: pointer;
+}
+
+.tsp-speed-labels {
+    color: var(--text-muted);
+    font-size: 0.76rem;
+    font-weight: 700;
+}
+
+.tsp-result-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.tsp-result-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: linear-gradient(180deg, white 0%, var(--bg-secondary) 100%);
+    color: var(--text-secondary);
+    font-size: 0.86rem;
+    min-width: 0;
+}
+
+.tsp-result-item span {
+    flex: none;
+}
+
+.tsp-result-item strong {
+    color: var(--accent);
+    flex: 1;
+    font-size: 0.95rem;
+    line-height: 1.35;
+    min-width: 0;
+    overflow-wrap: anywhere;
+    text-align: right;
+    white-space: normal;
+}
+
+.tsp-main {
+    min-width: 0;
+}
+
+.tsp-top-bar {
+    overflow-x: auto;
+}
+
+.tsp-canvas-container {
+    background:
+        radial-gradient(circle at 20% 20%, rgba(74, 124, 89, 0.10), transparent 34%),
+        radial-gradient(circle at 78% 24%, rgba(196, 163, 90, 0.12), transparent 28%),
+        linear-gradient(135deg, #FFFDF9 0%, #F8F5F0 52%, #F0EDE8 100%);
+}
+
+#tspCanvas {
+    width: 100%;
+    height: 100%;
+    cursor: crosshair;
+    display: block;
+}
+
+.btn-accent {
+    background: linear-gradient(135deg, var(--accent), var(--accent-hover));
+    color: white;
+    box-shadow: 0 6px 18px rgba(139, 115, 85, 0.25);
+}
+
+.btn-accent:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 24px rgba(139, 115, 85, 0.34);
+}
+
+.btn-full {
+    width: 100%;
+}
+
+body.dark-mode .tsp-canvas-container {
+    background:
+        radial-gradient(circle at 20% 20%, rgba(99, 193, 140, 0.10), transparent 34%),
+        radial-gradient(circle at 78% 24%, rgba(216, 177, 101, 0.10), transparent 28%),
+        linear-gradient(135deg, #0f172a 0%, #111827 52%, #1f2937 100%);
+}
+
+body.dark-mode .tsp-result-item {
+    background: linear-gradient(180deg, #1f2937 0%, #17202c 100%);
+    border-color: var(--border);
+}

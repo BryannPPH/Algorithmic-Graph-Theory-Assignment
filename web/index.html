@@ -42,6 +42,19 @@
                 </span>
                 Island Counter
             </a>
+            <a href="tsp.html" class="nav-tab">
+                <span class="tab-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="6" cy="6" r="2"/>
+                        <circle cx="18" cy="6" r="2"/>
+                        <circle cx="12" cy="18" r="2"/>
+                        <path d="M8 6h8"/>
+                        <path d="M17 7.5l-4 8"/>
+                        <path d="M7 7.5l4 8"/>
+                    </svg>
+                </span>
+                TSP
+            </a>
         </div>
         <div class="nav-info">
             <span>Tugas Teori Graf</span>
@@ -60,6 +73,55 @@
                 <div class="toggle-container">
                     <button id="undirectedBtn" class="toggle-btn active">Undirected</button>
                     <button id="directedBtn" class="toggle-btn">Directed</button>
+                </div>
+            </div>
+
+            <!-- Test Input -->
+            <div class="panel">
+                <h3>Input Test</h3>
+                <div class="preset-control">
+                    <label class="preset-label" for="graphPresetSelect">Kelas Graf</label>
+                    <select id="graphPresetSelect" class="preset-select">
+                        <option value="complete">Graf lengkap K_n</option>
+                        <option value="completeBipartite">Graf bipartit lengkap K_m,n</option>
+                        <option value="tree">Pohon T_n</option>
+                        <option value="cycle">Siklus C_n</option>
+                        <option value="path">Lintasan P_n</option>
+                        <option value="wheel">Graf roda W_n</option>
+                        <option value="prism">Graf prisma</option>
+                        <option value="petersen">Petersen graph</option>
+                        <option value="generalizedPetersen">Generalized Petersen P(n,k)</option>
+                        <option value="circulant">Circulant graph C_n(a1,a2)</option>
+                        <option value="hypercube">Hypercube H(n)</option>
+                        <option value="grid">Grid graph G(m,n)</option>
+                    </select>
+                    <div class="preset-params">
+                        <label class="preset-field" data-param="n">
+                            <span id="presetNLabel">n</span>
+                            <input id="presetN" type="number" min="1" value="6">
+                        </label>
+                        <label class="preset-field" data-param="m">
+                            <span id="presetMLabel">m</span>
+                            <input id="presetM" type="number" min="1" value="3">
+                        </label>
+                        <label class="preset-field" data-param="k">
+                            <span id="presetKLabel">k</span>
+                            <input id="presetK" type="number" min="1" value="2">
+                        </label>
+                        <label class="preset-field" data-param="a1">
+                            <span id="presetA1Label">a1</span>
+                            <input id="presetA1" type="number" min="1" value="1">
+                        </label>
+                        <label class="preset-field" data-param="a2">
+                            <span id="presetA2Label">a2</span>
+                            <input id="presetA2" type="number" min="1" value="3">
+                        </label>
+                    </div>
+                    <button id="loadPresetGraph" class="action-btn preset-load-btn" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><path d="M7 10l5 5 5-5"/><path d="M12 15V3"/></svg>
+                        Muat Graf
+                    </button>
+                    <p id="presetHint" class="preset-hint"></p>
                 </div>
             </div>
 
