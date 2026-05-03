@@ -1335,6 +1335,12 @@ class GraphVisualizer {
         document.getElementById('opShortestPath').onclick = () => this.selectTwoNodesAndRun('Lintasan Terpendek', this.runShortestPath.bind(this));
         document.getElementById('opMST').onclick = () => this.runMinimumSpanningTree();
         document.getElementById('opTSP').onclick = () => this.selectNodeAndRun('Travelling Salesman Problem (TSP)', this.runTSP.bind(this));
+        document.getElementById('openMatchingPage').onclick = () => {
+            window.location.href = 'matching.html';
+        };
+        document.getElementById('openSchedulePage').onclick = () => {
+            window.location.href = 'schedule.html';
+        };
 
         // Actions
         document.getElementById('clearGraph').onclick = () => {
