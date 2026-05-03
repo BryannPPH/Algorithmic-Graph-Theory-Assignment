@@ -1,6 +1,6 @@
-##Algorithmic Graph Assignment Theory
+# Algorithmic Graph Assignment Theory
 
-##Authors
+## Authors
 | Nama                           | NIM      |
 | ------------------------------ | -------- |
 | Farrell Limjaya                | 13524042 |
