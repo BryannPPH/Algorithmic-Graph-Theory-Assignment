@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Penjadwalan Kuliah - Teori Graf</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="schedule.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <nav class="top-nav">
+        <div class="nav-brand">
+            <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+                <circle cx="8" cy="8" r="4" fill="currentColor"/>
+                <circle cx="24" cy="8" r="4" fill="currentColor"/>
+                <circle cx="16" cy="24" r="4" fill="currentColor"/>
+                <line x1="8" y1="8" x2="24" y2="8" stroke="currentColor" stroke-width="2"/>
+                <line x1="8" y1="8" x2="16" y2="24" stroke="currentColor" stroke-width="2"/>
+                <line x1="24" y1="8" x2="16" y2="24" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            <span>Teori Graf Visualizer</span>
+        </div>
+        <div class="nav-tabs">
+            <a href="index.html" class="nav-tab">
+                <span class="tab-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M6 20v-6"/>
+                        <path d="M12 20V8"/>
+                        <path d="M18 20V4"/>
+                    </svg>
+                </span>
+                Graf Visualizer
+            </a>
+            <a href="islands.html" class="nav-tab">
+                <span class="tab-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M12 21s-6-4.35-6-10a6 6 0 1 1 12 0c0 5.65-6 10-6 10z"/>
+                        <circle cx="12" cy="11" r="2.5"/>
+                    </svg>
+                </span>
+                Island Counter
+            </a>
+            <a href="tsp.html" class="nav-tab">
+                <span class="tab-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="6" cy="6" r="2"/>
+                        <circle cx="18" cy="6" r="2"/>
+                        <circle cx="12" cy="18" r="2"/>
+                        <path d="M8 6h8"/>
+                        <path d="M17 7.5l-4 8"/>
+                        <path d="M7 7.5l4 8"/>
+                    </svg>
+                </span>
+                TSP
+            </a>
+            <a href="matching.html" class="nav-tab">
+                <span class="tab-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <circle cx="7" cy="7" r="2"/>
+                        <circle cx="7" cy="17" r="2"/>
+                        <circle cx="17" cy="7" r="2"/>
+                        <circle cx="17" cy="17" r="2"/>
+                        <path d="M9 7h6"/>
+                        <path d="M9 17h6"/>
+                        <path d="M9 8.6l6 6.8"/>
+                    </svg>
+                </span>
+                Matching
+            </a>
+            <a href="schedule.html" class="nav-tab active">
+                <span class="tab-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <rect x="3" y="4" width="18" height="18" rx="2"/>
+                        <path d="M8 2v4"/>
+                        <path d="M16 2v4"/>
+                        <path d="M3 10h18"/>
+                        <path d="M8 14h3"/>
+                        <path d="M13 14h3"/>
+                        <path d="M8 18h3"/>
+                    </svg>
+                </span>
+                Jadwal
+            </a>
+        </div>
+        <div class="nav-info">
+            <span>Tugas Teori Graf</span>
+            <button id="themeToggleBtn" class="theme-toggle-btn" type="button" aria-label="Aktifkan dark mode" title="Aktifkan dark mode">
+                <span class="theme-text">Dark Mode</span>
+            </button>
+        </div>
+    </nav>
+
+    <div class="app-container schedule-app">
+        <aside class="sidebar schedule-sidebar">
+            <div class="panel">
+                <h3>Contoh Cepat</h3>
+                <div class="preset-control">
+                    <label class="preset-label" for="schedulePresetSelect">Dataset</label>
+                    <select id="schedulePresetSelect" class="preset-select">
+                        <option value="semester-dasar">Semester Dasar</option>
+                        <option value="padat-3-slot">Padat 3 Slot</option>
+                        <option value="slot-kurang">Slot Kurang</option>
+                    </select>
+                    <button id="loadSchedulePreset" class="action-btn preset-load-btn" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <path d="M7 10l5 5 5-5"/>
+                            <path d="M12 15V3"/>
+                        </svg>
+                        Muat Contoh
+                    </button>
+                    <p id="schedulePresetHint" class="preset-hint"></p>
+                </div>
+            </div>
+
+            <div class="panel">
+                <h3>Mata Kuliah</h3>
+                <textarea id="courseInput" class="schedule-textarea" spellcheck="false" placeholder="IF201 | Matematika Diskrit&#10;IF202 | Struktur Data"></textarea>
+                <p class="schedule-field-hint">Satu baris satu mata kuliah. Format: <strong>KODE | Nama</strong>.</p>
+            </div>
+
+            <div class="panel">
+                <h3>Konflik</h3>
+                <textarea id="conflictInput" class="schedule-textarea schedule-textarea-sm" spellcheck="false" placeholder="IF201 IF202&#10;IF202 IF203"></textarea>
+                <p class="schedule-field-hint">Satu baris satu konflik. Format: <strong>KODE_A KODE_B</strong>.</p>
+            </div>
+
+            <div class="panel">
+                <h3>Slot Kuliah</h3>
+                <textarea id="slotInput" class="schedule-textarea schedule-textarea-sm" spellcheck="false" placeholder="Senin 08:00-10:00&#10;Selasa 10:00-12:00"></textarea>
+                <p class="schedule-field-hint">Urutan slot akan dipakai sebagai label hasil pewarnaan graf.</p>
+            </div>
+
+            <div class="panel">
+                <h3>Operasi Jadwal</h3>
+                <button id="solveScheduleBtn" class="btn btn-accent btn-full schedule-run-btn" type="button">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="4" width="18" height="18" rx="2"/>
+                        <path d="M8 2v4"/>
+                        <path d="M16 2v4"/>
+                        <path d="M3 10h18"/>
+                        <path d="M8 14h3"/>
+                        <path d="M13 14h3"/>
+                        <path d="M8 18h8"/>
+                    </svg>
+                    Jadwalkan Kuliah
+                </button>
+                <p class="schedule-algo-note">Pewarnaan konflik menggunakan <strong>DSATUR</strong>. Untuk dataset kecil, solver akan mencoba hasil <strong>exact branch and bound</strong>.</p>
+            </div>
+
+            <div class="panel">
+                <h3>Aksi</h3>
+                <div class="action-buttons schedule-actions">
+                    <button id="loadTemplateBtn" class="action-btn" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 5v14"/>
+                            <path d="M5 12h14"/>
+                        </svg>
+                        Isi Contoh
+                    </button>
+                    <button id="resetInputsBtn" class="action-btn danger" type="button">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M3 6h18M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                        </svg>
+                        Kosongkan
+                    </button>
+                </div>
+            </div>
+
+            <div class="panel schedule-result-panel">
+                <h3>Hasil</h3>
+                <div class="schedule-result-list">
+                    <div class="schedule-result-item">
+                        <span>Slot Minimum</span>
+                        <strong id="resultRequiredSlots">-</strong>
+                    </div>
+                    <div class="schedule-result-item">
+                        <span>Slot Tersedia</span>
+                        <strong id="resultAvailableSlots">-</strong>
+                    </div>
+                    <div class="schedule-result-item">
+                        <span>Slot Tambahan</span>
+                        <strong id="resultOverflowSlots">-</strong>
+                    </div>
+                    <div class="schedule-result-item">
+                        <span>Status</span>
+                        <strong id="resultScheduleStatus">-</strong>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <main class="main-content schedule-main">
+            <div class="top-bar schedule-top-bar">
+                <div class="graph-info">
+                    <div class="info-item">
+                        <span class="info-label">Mata Kuliah:</span>
+                        <span id="courseCountInfo" class="info-value">0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Konflik:</span>
+                        <span id="conflictCountInfo" class="info-value">0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Slot Input:</span>
+                        <span id="slotCountInfo" class="info-value">0</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Dipakai:</span>
+                        <span id="usedSlotInfo" class="info-value">-</span>
+                    </div>
+                    <div class="info-item">
+                        <span class="info-label">Algoritma:</span>
+                        <span id="algorithmInfo" class="info-value">-</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="schedule-workspace">
+                <section class="schedule-surface schedule-board-card">
+                    <div class="schedule-section-head">
+                        <div>
+                            <h2>Papan Jadwal</h2>
+                            <p id="statusBanner" class="schedule-status-banner">Masukkan mata kuliah, konflik, dan slot lalu jalankan penjadwalan.</p>
+                        </div>
+                    </div>
+                    <div id="scheduleBoard" class="schedule-board"></div>
+                </section>
+
+                <div class="schedule-lower-grid">
+                    <section class="schedule-surface schedule-table-card">
+                        <div class="schedule-section-head">
+                            <div>
+                                <h2>Penempatan Mata Kuliah</h2>
+                                <p>Daftar lengkap hasil pewarnaan graf konflik.</p>
+                            </div>
+                        </div>
+                        <div class="schedule-table-wrap">
+                            <table class="schedule-table">
+                                <thead>
+                                    <tr>
+                                        <th>Kode</th>
+                                        <th>Mata Kuliah</th>
+                                        <th>Slot</th>
+                                        <th>Konflik</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="assignmentTableBody"></tbody>
+                            </table>
+                        </div>
+                    </section>
+
+                    <section class="schedule-surface schedule-summary-card">
+                        <div class="schedule-section-head">
+                            <div>
+                                <h2>Ringkasan Konflik</h2>
+                                <p>Statistik cepat dari graf konflik penjadwalan.</p>
+                            </div>
+                        </div>
+                        <div id="scheduleSummaryCards" class="schedule-summary-cards"></div>
+                    </section>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="schedule.js"></script>
+</body>
+</html>
