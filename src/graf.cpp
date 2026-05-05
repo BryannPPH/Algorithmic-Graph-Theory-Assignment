@@ -13,6 +13,7 @@
 
 using namespace std;
 
+// Basic graph primitives used across all algorithms in this file.
 struct Node {
     double x, y;
     string label;
@@ -23,6 +24,7 @@ struct Edge {
     double weight;
 };
 
+// Result containers for traversal and graph-analysis routines.
 struct DistanceResult {
     int distance;
     vector<int> path;
@@ -97,6 +99,7 @@ struct TspResult {
     long long iterations;
 };
 
+// Result containers for matching and scheduling features mirrored from the web app.
 struct MatchingPair {
     int left;
     int right;
@@ -159,6 +162,7 @@ struct ScheduleResult {
     ScheduleSummary summary;
 };
 
+// Mutable graph model that stores geometry, orientation, and optional edge weights.
 class Graph {
 public:
     map<int, Node> nodes;
@@ -205,6 +209,7 @@ public:
     }
 
     double normalizeWeight(double weight = 1.0) const {
+        // Dijkstra and Kruskal assume non-negative finite weights.
         return isfinite(weight) && weight >= 0.0 ? weight : 1.0;
     }
 
@@ -296,6 +301,7 @@ public:
     }
 
     map<int, vector<pair<int, double>>> getWeightedAdjacencyList() const {
+        // Weighted adjacency is built on demand so unweighted operations stay simple.
         map<int, vector<pair<int, double>>> adj;
         for (const auto& kv : nodes) adj[kv.first] = {};
 
@@ -346,6 +352,7 @@ public:
         double x2,
         double y2
     ) const {
+        // Project the point onto the segment, then measure Euclidean distance.
         double A = px - x1;
         double B = py - y1;
         double C = x2 - x1;
@@ -385,12 +392,14 @@ public:
     }
 };
 
+// Collection of core graph algorithms used by the visualizer pages.
 class GraphAlgorithms {
     const Graph& graph;
 
 public:
     explicit GraphAlgorithms(const Graph& g) : graph(g) {}
 
+    // Standard depth-first traversal following the graph orientation.
     vector<int> dfs(int startNode) const {
         if (graph.nodes.find(startNode) == graph.nodes.end()) return {};
 
@@ -410,6 +419,7 @@ public:
         return order;
     }
 
+    // Standard breadth-first traversal following the graph orientation.
     vector<int> bfs(int startNode) const {
         if (graph.nodes.find(startNode) == graph.nodes.end()) return {};
 
@@ -437,6 +447,7 @@ public:
         return order;
     }
 
+    // Unweighted shortest path measured in number of edges.
     DistanceResult distance(int startNode, int endNode) const {
         if (graph.nodes.find(startNode) == graph.nodes.end()) return {-1, {}};
         if (graph.nodes.find(endNode) == graph.nodes.end()) return {-1, {}};
@@ -470,6 +481,7 @@ public:
         return {-1, {}};
     }
 
+    // Dijkstra with a min-heap; safe because weights are normalized to non-negative values.
     WeightedDistanceResult shortestPathWeighted(int startNode, int endNode) const {
         const double INF = numeric_limits<double>::infinity();
         if (graph.nodes.find(startNode) == graph.nodes.end()) return {INF, {}};
@@ -514,6 +526,7 @@ public:
         return shortestPathWeighted(startNode, endNode);
     }
 
+    // Connectivity checks ignore orientation to match the visualizer's component semantics.
     bool isConnected() const {
         auto nodeList = getNodeIds();
         if (nodeList.empty()) return true;
@@ -539,6 +552,7 @@ public:
         return count;
     }
 
+    // Returns the connected component containing a given start node.
     ComponentResult getComponentSize(int startNode) const {
         if (graph.nodes.find(startNode) == graph.nodes.end()) return {0, {}};
 
@@ -584,6 +598,7 @@ public:
         return components;
     }
 
+    // Picks the largest connected component under the same undirected interpretation.
     ComponentResult getLargestComponent() const {
         auto components = getAllComponents();
         if (components.empty()) return {0, {}};
@@ -597,6 +612,7 @@ public:
         return {static_cast<int>(largest->size()), *largest};
     }
 
+    // Kruskal grows a minimum spanning forest; disconnected graphs return a forest, not a single tree.
     MinimumSpanningTreeResult getMinimumSpanningTree() const {
         auto nodeList = getNodeIds();
 
@@ -659,6 +675,7 @@ public:
         double totalWeight = 0.0;
 
         for (const Edge& edge : sortedEdges) {
+            // Only keep edges that connect two different DSU components.
             if (dsu.unite(edge.from, edge.to)) {
                 mstEdges.push_back({edge.from, edge.to, graph.normalizeWeight(edge.weight)});
                 totalWeight += graph.normalizeWeight(edge.weight);
@@ -670,6 +687,7 @@ public:
         return {false, disconnected, componentCount, totalWeight, mstEdges};
     }
 
+    // Exact TSP solver for small graphs using permutation search with branch-and-bound pruning.
     TspResult solveTSPBruteForce(int startNode) const {
         vector<int> nodes = getNodeIds();
         sort(nodes.begin(), nodes.end());
@@ -747,6 +765,7 @@ public:
                     double edgeWeight = 0.0;
                     if (!graph.tryGetEdgeWeight(currentNode, nextNode, edgeWeight)) continue;
 
+                    // Prune partial tours that are already worse than the best exact solution found.
                     double nextWeight = totalWeight + edgeWeight;
                     if (nextWeight > bestWeight) continue;
 
@@ -782,6 +801,7 @@ public:
         return result;
     }
 
+    // Two-coloring by BFS on the undirected view of the graph.
     BipartiteResult isBipartite() const {
         auto nodeList = getNodeIds();
         if (nodeList.empty()) return {true, {}, {}};
@@ -831,6 +851,7 @@ public:
         return result;
     }
 
+    // Diameter is computed by BFS from every node, so this is exact for unweighted graphs.
     DiameterResult getDiameter() const {
         auto nodeList = getNodeIds();
         if (nodeList.empty()) return {0, -1, -1, {}, false};
@@ -879,6 +900,7 @@ public:
         return {maxDist, diamFrom, diamTo, diamPath, false};
     }
 
+    // Directed cycle detection uses DFS colors; undirected detection uses parent tracking.
     CycleResult detectCycle() const {
         auto nodeList = getNodeIds();
         if (nodeList.empty()) return {false, {}};
@@ -959,6 +981,7 @@ public:
         return {found, cycleNodes};
     }
 
+    // Girth is the length of the shortest cycle; computed by BFS from each node.
     GirthResult getGirth() const {
         auto nodeList = getNodeIds();
         if (nodeList.empty()) return {numeric_limits<int>::max(), {}};
@@ -990,6 +1013,7 @@ public:
                             parentMap[neighbor] = node;
                             q.push(neighbor);
                         } else if (parentMap[node] != neighbor) {
+                            // A non-tree edge in the BFS tree yields a cycle candidate.
                             int cycleLen = currentDist + dist[neighbor] + 1;
                             if (cycleLen < minGirth) {
                                 minGirth = cycleLen;
@@ -1060,6 +1084,7 @@ public:
                     q.pop();
                     int currentDist = dist[node];
 
+                    // No need to continue once this BFS depth cannot beat the current best cycle.
                     if (currentDist >= minGirth) break;
 
                     for (int neighbor : adj[node]) {
@@ -1088,6 +1113,7 @@ public:
         return {minGirth, bestCycle};
     }
 
+    // Hopcroft-Karp on a caller-supplied bipartition of the graph.
     MatchingResult maximumBipartiteMatching(const vector<int>& leftNodes, const vector<int>& rightNodes) const {
         MatchingResult result;
         result.validBipartition = false;
@@ -1130,6 +1156,7 @@ public:
         for (int rightNode : rightNodes) pairRight[rightNode] = -1;
 
         auto bfsLayering = [&]() -> bool {
+            // Build alternating-path layers starting from every free node on the left side.
             queue<int> q;
             bool foundAugmentingPath = false;
 
@@ -1162,6 +1189,7 @@ public:
         };
 
         function<bool(int)> dfsAugment = [&](int leftNode) -> bool {
+            // Respect the BFS layering so each phase finds a maximal set of shortest augmenting paths.
             for (int rightNode : adjacency[leftNode]) {
                 int mate = pairRight[rightNode];
                 if (mate == -1 || (dist[mate] == dist[leftNode] + 1 && dfsAugment(mate))) {
@@ -1197,6 +1225,7 @@ public:
         return result;
     }
 
+    // Convenience wrapper that derives the partition from the graph's bipartite coloring.
     MatchingResult maximumBipartiteMatchingAuto() const {
         BipartiteResult partition = isBipartite();
         if (!partition.isBipartite) return {false, 0, {}, {}, {}};
@@ -1204,6 +1233,7 @@ public:
         return maximumBipartiteMatching(partition.setA, partition.setB);
     }
 
+    // Counts 4-connected islands in a binary grid.
     static IslandResult countIslandsInGrid(const vector<vector<int>>& grid) {
         if (grid.empty() || grid[0].empty()) return {0, 0};
 
@@ -1256,6 +1286,7 @@ public:
     }
 
 private:
+    // Helper used by several algorithms that need stable iteration over node IDs.
     vector<int> getNodeIds() const {
         vector<int> ids;
         ids.reserve(graph.nodes.size());
@@ -1270,6 +1301,7 @@ private:
         }
     }
 
+    // Rebuilds a path from an end node using a predecessor map.
     static vector<int> reconstructPath(const map<int, int>& parent, int endNode) {
         vector<int> path;
         int current = endNode;
@@ -1282,6 +1314,7 @@ private:
         return path;
     }
 
+    // Used by the TSP solver to break ties deterministically.
     static bool isLexicographicallySmaller(const vector<int>& candidate, const vector<int>& currentBest) {
         if (currentBest.empty()) return true;
 
@@ -1293,8 +1326,10 @@ private:
     }
 };
 
+// Graph-coloring utilities for the course scheduling page.
 class ScheduleAlgorithms {
 public:
+    // Greedy DSATUR chooses the next vertex by saturation degree, then assigns the smallest valid color.
     static ScheduleColoringResult greedyDsaturColoring(
         const vector<string>& courseCodes,
         const map<string, set<string>>& adjacency
@@ -1316,6 +1351,7 @@ public:
         return result;
     }
 
+    // Exact DSATUR branch-and-bound improves the greedy result for small datasets.
     static ScheduleColoringResult exactDsaturColoring(
         const vector<string>& courseCodes,
         const map<string, set<string>>& adjacency,
@@ -1341,6 +1377,7 @@ public:
             string code = selectDsaturVertex(courseCodes, adjacency, currentColors);
             set<int> forbidden = getNeighborColorSet(code, adjacency, currentColors);
 
+            // Try reusing existing colors before opening a new slot.
             for (int color = 0; color < usedColorCount; color++) {
                 if (forbidden.count(color)) continue;
                 currentColors[code] = color;
@@ -1359,6 +1396,7 @@ public:
         return {bestColors, bestCount};
     }
 
+    // Converts a conflict graph coloring into slot assignments and summary statistics.
     static ScheduleResult solveScheduleDataset(
         vector<ScheduleCourse> courses,
         vector<ScheduleConflict> conflicts,
@@ -1483,6 +1521,7 @@ public:
     }
 
 private:
+    // Builds the undirected conflict graph between courses.
     static map<string, set<string>> buildAdjacency(
         const vector<string>& courseCodes,
         const vector<ScheduleConflict>& conflicts
@@ -1498,6 +1537,7 @@ private:
         return adjacency;
     }
 
+    // Collects the colors already used by adjacent vertices.
     static set<int> getNeighborColorSet(
         const string& code,
         const map<string, set<string>>& adjacency,
@@ -1514,6 +1554,7 @@ private:
         return colors;
     }
 
+    // DSATUR tie-break: saturation first, then degree, then natural code ordering.
     static string selectDsaturVertex(
         const vector<string>& courseCodes,
         const map<string, set<string>>& adjacency,
@@ -1546,6 +1587,7 @@ private:
         return bestCode;
     }
 
+    // Natural-order comparison so codes like IF2 sort before IF10.
     static int compareCodes(const string& a, const string& b) {
         size_t i = 0;
         size_t j = 0;
