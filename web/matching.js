@@ -2,6 +2,7 @@ const MATCHING_LABEL_COLLATOR = new Intl.Collator('id', {
     numeric: true,
     sensitivity: 'base'
 });
+const MATCHING_TRACE_LIMIT = 180;
 
 function compareMatchingLabels(a, b) {
     return MATCHING_LABEL_COLLATOR.compare(String(a), String(b));
@@ -162,10 +163,42 @@ function parseMatchingTXT(text) {
     return { nodeLabels, edges };
 }
 
-function computeHopcroftKarp(leftNodeIds, rightNodeIds, edges) {
+function createMatchingTraceRecorder(limit = MATCHING_TRACE_LIMIT) {
+    return {
+        limit,
+        events: [],
+        truncated: false
+    };
+}
+
+function pushMatchingTrace(recorder, event) {
+    if (!recorder) return false;
+    if (recorder.events.length >= recorder.limit) {
+        recorder.truncated = true;
+        return false;
+    }
+
+    recorder.events.push(event);
+    return true;
+}
+
+function snapshotMatchingEdgeKeys(pairLeft) {
+    const keys = [];
+
+    for (const [leftId, rightId] of pairLeft.entries()) {
+        if (rightId !== null) {
+            keys.push(normalizeUndirectedEdgeKey(leftId, rightId));
+        }
+    }
+
+    return keys;
+}
+
+function computeHopcroftKarp(leftNodeIds, rightNodeIds, edges, options = {}) {
     const leftIds = leftNodeIds.slice();
     const rightIds = rightNodeIds.slice();
     const adjacency = new Map(leftIds.map((id) => [id, []]));
+    const traceRecorder = options.trace ? createMatchingTraceRecorder(options.traceLimit) : null;
 
     for (const edge of edges) {
         if (!adjacency.has(edge.from)) {
@@ -195,44 +228,123 @@ function computeHopcroftKarp(leftNodeIds, rightNodeIds, edges) {
             }
         }
 
+        pushMatchingTrace(traceRecorder, {
+            type: 'bfs-seed',
+            freeLeftIds: queue.slice()
+        });
+
         while (queue.length > 0) {
             const currentLeft = queue.shift();
             const currentDist = dist.get(currentLeft);
 
+            pushMatchingTrace(traceRecorder, {
+                type: 'bfs-left',
+                leftId: currentLeft,
+                depth: currentDist
+            });
+
             for (const rightId of adjacency.get(currentLeft) || []) {
                 const mate = pairRight.get(rightId);
+                pushMatchingTrace(traceRecorder, {
+                    type: 'bfs-edge',
+                    leftId: currentLeft,
+                    rightId,
+                    mateLeftId: mate
+                });
+
                 if (mate === null) {
                     foundAugmentingPath = true;
+                    pushMatchingTrace(traceRecorder, {
+                        type: 'bfs-free-right',
+                        leftId: currentLeft,
+                        rightId
+                    });
                 } else if (dist.get(mate) === Number.POSITIVE_INFINITY) {
                     dist.set(mate, currentDist + 1);
                     queue.push(mate);
+                    pushMatchingTrace(traceRecorder, {
+                        type: 'bfs-layer',
+                        leftId: currentLeft,
+                        rightId,
+                        mateLeftId: mate,
+                        depth: currentDist + 1
+                    });
                 }
             }
         }
+
+        pushMatchingTrace(traceRecorder, {
+            type: 'bfs-finish',
+            found: foundAugmentingPath
+        });
 
         return foundAugmentingPath;
     };
 
     const dfs = (leftId) => {
+        pushMatchingTrace(traceRecorder, {
+            type: 'dfs-start',
+            leftId
+        });
+
         for (const rightId of adjacency.get(leftId) || []) {
             const mate = pairRight.get(rightId);
-            if (mate === null || (dist.get(mate) === dist.get(leftId) + 1 && dfs(mate))) {
+            pushMatchingTrace(traceRecorder, {
+                type: 'dfs-edge',
+                leftId,
+                rightId,
+                mateLeftId: mate
+            });
+
+            if (mate === null) {
                 pairLeft.set(leftId, rightId);
                 pairRight.set(rightId, leftId);
-                return true;
+                return [normalizeUndirectedEdgeKey(leftId, rightId)];
+            }
+
+            if (dist.get(mate) === dist.get(leftId) + 1) {
+                const suffix = dfs(mate);
+                if (suffix) {
+                    pairLeft.set(leftId, rightId);
+                    pairRight.set(rightId, leftId);
+
+                    return [
+                        normalizeUndirectedEdgeKey(leftId, rightId),
+                        normalizeUndirectedEdgeKey(mate, rightId),
+                        ...suffix
+                    ];
+                }
             }
         }
 
         dist.set(leftId, Number.POSITIVE_INFINITY);
-        return false;
+        pushMatchingTrace(traceRecorder, {
+            type: 'dfs-dead-end',
+            leftId
+        });
+        return null;
     };
 
     let matchingSize = 0;
 
     while (bfs()) {
         for (const leftId of leftIds) {
-            if (pairLeft.get(leftId) === null && dfs(leftId)) {
+            if (pairLeft.get(leftId) !== null) continue;
+
+            const augmentingPath = dfs(leftId);
+            if (augmentingPath) {
                 matchingSize++;
+                pushMatchingTrace(traceRecorder, {
+                    type: 'augment',
+                    leftId,
+                    edgeKeys: Array.from(new Set(augmentingPath))
+                });
+                pushMatchingTrace(traceRecorder, {
+                    type: 'match-commit',
+                    leftId,
+                    matchingSize,
+                    matchedEdgeKeys: snapshotMatchingEdgeKeys(pairLeft)
+                });
             }
         }
     }
@@ -249,7 +361,13 @@ function computeHopcroftKarp(leftNodeIds, rightNodeIds, edges) {
         matchingSize,
         pairs,
         pairLeft,
-        pairRight
+        pairRight,
+        searchTrace: traceRecorder
+            ? {
+                events: traceRecorder.events,
+                truncated: traceRecorder.truncated
+            }
+            : null
     };
 }
 
@@ -270,10 +388,17 @@ class MatchingPage {
         this.matchedEdgeKeys = new Set();
         this.latestMatching = null;
         this.hasComputedMatching = false;
+        this.isAnimating = false;
+        this.animationRunId = 0;
+        this.traceMessages = [];
+        this.animationState = this.createEmptyAnimationState();
 
         this.canvas = document.getElementById('matchingCanvas');
         this.ctx = this.canvas.getContext('2d');
         this.canvasContainer = document.getElementById('canvasContainer');
+        this.solveButton = document.getElementById('solveMatchingBtn');
+        this.solveButtonMarkup = this.solveButton ? this.solveButton.innerHTML : '';
+        this.prefersReducedMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
         this.init();
     }
@@ -285,9 +410,270 @@ class MatchingPage {
         this.setupCanvasEvents();
         this.setupUIEvents();
         this.setupPresetEvents();
+        this.resetMatchingTraceUI();
         this.setTool('addLeftNode');
         this.updateStats();
         this.render();
+    }
+
+    createEmptyAnimationState() {
+        return {
+            phaseLabel: 'Siap',
+            stepLabel: '0 langkah',
+            message: this.getDefaultTraceMessage(),
+            activeLeftId: null,
+            activeRightId: null,
+            activeEdgeKeys: new Set(),
+            augmentingEdgeKeys: new Set(),
+            frontierLeftIds: new Set(),
+            frontierRightIds: new Set(),
+            layeredLeftIds: new Set()
+        };
+    }
+
+    getDefaultTraceMessage() {
+        return 'Jejak BFS dan DFS augmentasi akan tampil di sini saat matching dijalankan.';
+    }
+
+    resetMatchingTraceUI() {
+        this.traceMessages = [];
+        this.animationState = this.createEmptyAnimationState();
+        this.renderMatchingTraceLog();
+        this.syncMatchingTraceUI();
+    }
+
+    syncMatchingTraceUI() {
+        document.getElementById('matchingTracePhase').textContent = this.animationState.phaseLabel;
+        document.getElementById('matchingTraceStep').textContent = this.animationState.stepLabel;
+        document.getElementById('matchingTraceMessage').textContent = this.animationState.message;
+    }
+
+    renderMatchingTraceLog() {
+        const list = document.getElementById('matchingTraceList');
+        if (!list) return;
+
+        if (this.traceMessages.length === 0) {
+            list.innerHTML = '<div class="matching-trace-item is-muted">Belum ada pencarian yang divisualisasikan.</div>';
+            return;
+        }
+
+        list.innerHTML = this.traceMessages
+            .map((message) => `<div class="matching-trace-item">${escapeHTML(message)}</div>`)
+            .join('');
+    }
+
+    pushMatchingTraceMessage(message) {
+        this.traceMessages.unshift(message);
+        this.traceMessages = this.traceMessages.slice(0, 5);
+        this.renderMatchingTraceLog();
+    }
+
+    setMatchingBusy(disabled) {
+        const controlIds = [
+            'addLeftNodeTool',
+            'addRightNodeTool',
+            'addEdgeTool',
+            'moveTool',
+            'deleteTool',
+            'solveMatchingBtn',
+            'autoLayout',
+            'resetMatching',
+            'clearGraph',
+            'importTxt',
+            'matchingPresetSelect',
+            'matchingPresetM',
+            'matchingPresetN',
+            'loadMatchingPreset',
+            'txtFileInput'
+        ];
+
+        for (const id of controlIds) {
+            const element = document.getElementById(id);
+            if (element) {
+                element.disabled = disabled;
+            }
+        }
+
+        this.canvas.style.pointerEvents = disabled ? 'none' : 'auto';
+        this.canvasContainer.classList.toggle('is-animating', disabled);
+
+        if (this.solveButton) {
+            this.solveButton.innerHTML = disabled
+                ? 'Memvisualisasikan Pencarian...'
+                : this.solveButtonMarkup;
+        }
+    }
+
+    getMatchingTracePhaseLabel(event) {
+        switch (event.type) {
+            case 'bfs-seed':
+            case 'bfs-left':
+            case 'bfs-edge':
+            case 'bfs-free-right':
+            case 'bfs-layer':
+            case 'bfs-finish':
+                return 'BFS Layering';
+            case 'dfs-start':
+            case 'dfs-edge':
+            case 'dfs-dead-end':
+                return 'DFS Augment';
+            case 'augment':
+            case 'match-commit':
+                return 'Augmentasi';
+            default:
+                return 'Pencarian';
+        }
+    }
+
+    getMatchingTraceDelay(totalSteps, emphasized = false) {
+        if (this.prefersReducedMotion) return 24;
+
+        const base = Math.min(165, Math.max(55, Math.round(5200 / Math.max(1, totalSteps))));
+        return emphasized ? Math.round(base * 1.5) : base;
+    }
+
+    getMatchingNodeLabel(nodeId) {
+        return this.getNodeById(nodeId)?.label || String(nodeId);
+    }
+
+    describeMatchingTraceEvent(event) {
+        switch (event.type) {
+            case 'bfs-seed':
+                return `${event.freeLeftIds.length} simpul kiri bebas dimasukkan ke antrean BFS.`;
+            case 'bfs-left':
+                return `BFS memeriksa tetangga ${this.getMatchingNodeLabel(event.leftId)} pada layer ${event.depth}.`;
+            case 'bfs-edge':
+                return `BFS mengecek sisi ${this.getMatchingNodeLabel(event.leftId)}-${this.getMatchingNodeLabel(event.rightId)}.`;
+            case 'bfs-free-right':
+                return `${this.getMatchingNodeLabel(event.rightId)} masih bebas, jalur augmentasi mulai terlihat.`;
+            case 'bfs-layer':
+                return `${this.getMatchingNodeLabel(event.rightId)} sedang dipasangkan dengan ${this.getMatchingNodeLabel(event.mateLeftId)}, maka ${this.getMatchingNodeLabel(event.mateLeftId)} masuk layer berikut.`;
+            case 'bfs-finish':
+                return event.found
+                    ? 'BFS menemukan lapisan yang masih punya peluang augmentasi.'
+                    : 'BFS tidak lagi menemukan augmenting path baru.';
+            case 'dfs-start':
+                return `DFS mencoba memperluas matching dari ${this.getMatchingNodeLabel(event.leftId)}.`;
+            case 'dfs-edge':
+                return event.mateLeftId === null
+                    ? `DFS menguji ${this.getMatchingNodeLabel(event.leftId)}-${this.getMatchingNodeLabel(event.rightId)} dan menemukan simpul kanan yang bebas.`
+                    : `DFS menguji ${this.getMatchingNodeLabel(event.leftId)}-${this.getMatchingNodeLabel(event.rightId)} lewat pasangan ${this.getMatchingNodeLabel(event.mateLeftId)}.`;
+            case 'dfs-dead-end':
+                return `Cabang pencarian dari ${this.getMatchingNodeLabel(event.leftId)} buntu.`;
+            case 'augment':
+                return `Augmenting path dari ${this.getMatchingNodeLabel(event.leftId)} ditemukan dan akan diterapkan.`;
+            case 'match-commit':
+                return `Matching bertambah menjadi ${event.matchingSize} pasangan.`;
+            default:
+                return this.getDefaultTraceMessage();
+        }
+    }
+
+    dedupeEdgeKeys(keys) {
+        return Array.from(new Set(keys || []));
+    }
+
+    applyMatchingTraceEvent(event, stepIndex, totalSteps) {
+        const nextState = this.createEmptyAnimationState();
+        nextState.phaseLabel = this.getMatchingTracePhaseLabel(event);
+        nextState.stepLabel = `${stepIndex}/${totalSteps} langkah`;
+        nextState.message = this.describeMatchingTraceEvent(event);
+
+        switch (event.type) {
+            case 'bfs-seed':
+                nextState.frontierLeftIds = new Set(event.freeLeftIds || []);
+                break;
+            case 'bfs-left':
+                nextState.activeLeftId = event.leftId;
+                break;
+            case 'bfs-edge':
+                nextState.activeLeftId = event.leftId;
+                nextState.activeRightId = event.rightId;
+                nextState.activeEdgeKeys = new Set([normalizeUndirectedEdgeKey(event.leftId, event.rightId)]);
+                if (event.mateLeftId !== null) {
+                    nextState.layeredLeftIds = new Set([event.mateLeftId]);
+                }
+                break;
+            case 'bfs-free-right':
+                nextState.activeLeftId = event.leftId;
+                nextState.activeRightId = event.rightId;
+                nextState.activeEdgeKeys = new Set([normalizeUndirectedEdgeKey(event.leftId, event.rightId)]);
+                nextState.frontierRightIds = new Set([event.rightId]);
+                break;
+            case 'bfs-layer':
+                nextState.activeLeftId = event.leftId;
+                nextState.activeRightId = event.rightId;
+                nextState.activeEdgeKeys = new Set([normalizeUndirectedEdgeKey(event.leftId, event.rightId)]);
+                nextState.frontierRightIds = new Set([event.rightId]);
+                nextState.layeredLeftIds = new Set([event.mateLeftId]);
+                break;
+            case 'dfs-start':
+                nextState.activeLeftId = event.leftId;
+                break;
+            case 'dfs-edge':
+                nextState.activeLeftId = event.leftId;
+                nextState.activeRightId = event.rightId;
+                nextState.activeEdgeKeys = new Set([normalizeUndirectedEdgeKey(event.leftId, event.rightId)]);
+                if (event.mateLeftId !== null) {
+                    nextState.layeredLeftIds = new Set([event.mateLeftId]);
+                }
+                break;
+            case 'dfs-dead-end':
+                nextState.activeLeftId = event.leftId;
+                break;
+            case 'augment':
+                nextState.activeLeftId = event.leftId;
+                nextState.augmentingEdgeKeys = new Set(this.dedupeEdgeKeys(event.edgeKeys));
+                break;
+            case 'match-commit':
+                nextState.activeLeftId = event.leftId;
+                nextState.augmentingEdgeKeys = new Set(event.matchedEdgeKeys || []);
+                this.matchedEdgeKeys = new Set(event.matchedEdgeKeys || []);
+                break;
+            default:
+                break;
+        }
+
+        this.animationState = nextState;
+        this.syncMatchingTraceUI();
+        this.pushMatchingTraceMessage(nextState.message);
+        this.updateStats();
+        this.render();
+    }
+
+    async waitForPlayback(ms) {
+        await new Promise((resolve) => {
+            window.setTimeout(resolve, ms);
+        });
+    }
+
+    async playMatchingTrace(trace) {
+        const events = trace?.events || [];
+        if (events.length === 0) return;
+
+        const runId = ++this.animationRunId;
+        this.traceMessages = [];
+        this.renderMatchingTraceLog();
+        this.matchedEdgeKeys.clear();
+        this.updateStats();
+        this.render();
+
+        for (let index = 0; index < events.length; index++) {
+            if (runId !== this.animationRunId) return;
+
+            const event = events[index];
+            this.applyMatchingTraceEvent(event, index + 1, events.length);
+
+            const emphasized = ['bfs-free-right', 'augment', 'match-commit'].includes(event.type);
+            await this.waitForPlayback(this.getMatchingTraceDelay(events.length, emphasized));
+        }
+
+        if (trace.truncated) {
+            const message = 'Sebagian langkah diringkas agar animasi tetap responsif.';
+            this.animationState.message = message;
+            this.syncMatchingTraceUI();
+            this.pushMatchingTraceMessage(message);
+        }
     }
 
     setupThemeToggle() {
@@ -621,9 +1007,23 @@ class MatchingPage {
     }
 
     clearMatching(update = true) {
+        const wasAnimating = this.isAnimating;
+        const hadTraceState = this.traceMessages.length > 0
+            || this.animationState.message !== this.getDefaultTraceMessage()
+            || this.animationState.phaseLabel !== 'Siap'
+            || this.isAnimating;
+        this.animationRunId++;
+        this.isAnimating = false;
         this.matchedEdgeKeys.clear();
         this.latestMatching = null;
         this.hasComputedMatching = false;
+        if (hadTraceState) {
+            this.resetMatchingTraceUI();
+        }
+
+        if (wasAnimating) {
+            this.setMatchingBusy(false);
+        }
 
         if (update) {
             this.updateStats();
@@ -906,7 +1306,12 @@ class MatchingPage {
         }
     }
 
-    solveMaximumMatching() {
+    async solveMaximumMatching() {
+        if (this.isAnimating) {
+            this.showToast('Animasi matching masih berjalan.', 'warning');
+            return;
+        }
+
         const leftNodes = this.nodes
             .filter((node) => node.partition === 'left')
             .sort((a, b) => compareMatchingLabels(a.label, b.label));
@@ -927,14 +1332,44 @@ class MatchingPage {
         const result = computeHopcroftKarp(
             leftNodes.map((node) => node.id),
             rightNodes.map((node) => node.id),
-            this.edges
+            this.edges,
+            {
+                trace: true,
+                traceLimit: MATCHING_TRACE_LIMIT
+            }
         );
 
-        this.hasComputedMatching = true;
+        this.hideResultModal();
+        this.matchedEdgeKeys.clear();
+        this.latestMatching = null;
+        this.hasComputedMatching = false;
+        this.isAnimating = true;
+        this.resetMatchingTraceUI();
+        this.animationState.phaseLabel = 'Persiapan';
+        this.animationState.stepLabel = `0/${result.searchTrace?.events?.length || 0} langkah`;
+        this.animationState.message = 'Membangun layer BFS dan mencoba augmenting path pada graf bipartit.';
+        this.syncMatchingTraceUI();
+        this.updateStats();
+        this.render();
+        this.setMatchingBusy(true);
+
+        try {
+            await this.playMatchingTrace(result.searchTrace);
+        } finally {
+            this.isAnimating = false;
+            this.setMatchingBusy(false);
+        }
+
         this.latestMatching = result;
+        this.hasComputedMatching = true;
         this.matchedEdgeKeys = new Set(
             result.pairs.map((pair) => normalizeUndirectedEdgeKey(pair.left, pair.right))
         );
+        this.animationState.phaseLabel = 'Selesai';
+        this.animationState.stepLabel = `${result.searchTrace?.events?.length || 0}/${result.searchTrace?.events?.length || 0} langkah`;
+        this.animationState.message = `Matching maksimum selesai dengan ${result.matchingSize} pasangan.`;
+        this.syncMatchingTraceUI();
+        this.pushMatchingTraceMessage(this.animationState.message);
         this.updateStats();
         this.render();
 
@@ -1025,9 +1460,13 @@ class MatchingPage {
     updateStats() {
         const leftCount = this.nodes.filter((node) => node.partition === 'left').length;
         const rightCount = this.nodes.filter((node) => node.partition === 'right').length;
+        const liveMatchingSize = this.matchedEdgeKeys.size;
+        const showingLiveMatching = this.isAnimating;
         const matchingSize = this.hasComputedMatching && this.latestMatching
             ? this.latestMatching.matchingSize
-            : '-';
+            : showingLiveMatching
+                ? liveMatchingSize
+                : '-';
 
         document.getElementById('leftNodeCount').textContent = String(leftCount);
         document.getElementById('rightNodeCount').textContent = String(rightCount);
@@ -1038,13 +1477,19 @@ class MatchingPage {
         document.getElementById('resultMatchingSize').textContent = String(matchingSize);
         document.getElementById('resultMatchedPairs').textContent = this.hasComputedMatching && this.latestMatching
             ? `${this.latestMatching.pairs.length} pasang`
-            : '-';
+            : showingLiveMatching
+                ? `${liveMatchingSize} pasang sementara`
+                : '-';
         document.getElementById('resultFreeLeft').textContent = this.hasComputedMatching && this.latestMatching
             ? String(leftCount - this.latestMatching.matchingSize)
-            : '-';
+            : showingLiveMatching
+                ? String(leftCount - liveMatchingSize)
+                : '-';
         document.getElementById('resultFreeRight').textContent = this.hasComputedMatching && this.latestMatching
             ? String(rightCount - this.latestMatching.matchingSize)
-            : '-';
+            : showingLiveMatching
+                ? String(rightCount - liveMatchingSize)
+                : '-';
     }
 
     getCurrentModeLabel() {
@@ -1097,6 +1542,7 @@ class MatchingPage {
         this.drawEdges();
         this.drawTemporaryEdge();
         this.drawNodes();
+        this.drawSearchOverlay(width, height);
     }
 
     drawPartitionBackdrop(width, height) {
@@ -1138,15 +1584,30 @@ class MatchingPage {
             const toNode = this.getNodeById(edge.to);
             if (!fromNode || !toNode) continue;
 
-            const isMatched = this.matchedEdgeKeys.has(normalizeUndirectedEdgeKey(edge.from, edge.to));
+            const edgeKey = normalizeUndirectedEdgeKey(edge.from, edge.to);
+            const isMatched = this.matchedEdgeKeys.has(edgeKey);
+            const isActiveSearch = this.animationState.activeEdgeKeys.has(edgeKey);
+            const isAugmenting = this.animationState.augmentingEdgeKeys.has(edgeKey);
             ctx.save();
             ctx.beginPath();
             ctx.moveTo(fromNode.x, fromNode.y);
             ctx.lineTo(toNode.x, toNode.y);
-            ctx.lineWidth = isMatched ? 5 : 2.5;
-            ctx.strokeStyle = isMatched ? colors.matchedEdge : colors.edge;
-            ctx.shadowColor = isMatched ? colors.matchedGlow : 'transparent';
-            ctx.shadowBlur = isMatched ? 16 : 0;
+            ctx.lineWidth = isAugmenting ? 6 : isActiveSearch ? 4.5 : isMatched ? 5 : 2.5;
+            ctx.strokeStyle = isAugmenting
+                ? colors.augmentingEdge
+                : isActiveSearch
+                    ? colors.searchEdge
+                    : isMatched
+                        ? colors.matchedEdge
+                        : colors.edge;
+            ctx.shadowColor = isAugmenting
+                ? colors.augmentingGlow
+                : isActiveSearch
+                    ? colors.searchGlow
+                    : isMatched
+                        ? colors.matchedGlow
+                        : 'transparent';
+            ctx.shadowBlur = isAugmenting ? 20 : isActiveSearch ? 15 : isMatched ? 16 : 0;
             ctx.stroke();
             ctx.restore();
         }
@@ -1181,9 +1642,10 @@ class MatchingPage {
         for (const node of this.nodes) {
             const isHovered = node.id === this.hoveredNodeId;
             const isSelected = node.id === this.edgeStartNodeId;
-            const isMatched = this.hasComputedMatching && this.latestMatching
-                ? this.matchedEdgeKeys.size > 0 && this.isNodeMatched(node.id)
-                : false;
+            const isMatched = this.matchedEdgeKeys.size > 0 && this.isNodeMatched(node.id);
+            const isActiveSearch = node.id === this.animationState.activeLeftId || node.id === this.animationState.activeRightId;
+            const isFrontier = this.animationState.frontierLeftIds.has(node.id) || this.animationState.frontierRightIds.has(node.id);
+            const isLayered = this.animationState.layeredLeftIds.has(node.id);
 
             const fillColor = node.partition === 'left' ? colors.leftNode : colors.rightNode;
 
@@ -1196,13 +1658,37 @@ class MatchingPage {
                 ctx.restore();
             }
 
+            if (isFrontier || isLayered) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, this.nodeRadius + (isLayered ? 12 : 10), 0, Math.PI * 2);
+                ctx.fillStyle = isLayered ? colors.searchLayerHalo : colors.searchFrontierHalo;
+                ctx.fill();
+                ctx.restore();
+            }
+
+            if (isActiveSearch) {
+                ctx.save();
+                ctx.beginPath();
+                ctx.arc(node.x, node.y, this.nodeRadius + 14, 0, Math.PI * 2);
+                ctx.fillStyle = colors.searchActiveHalo;
+                ctx.fill();
+                ctx.restore();
+            }
+
             ctx.save();
             ctx.beginPath();
             ctx.arc(node.x, node.y, this.nodeRadius + (isHovered ? 2 : 0), 0, Math.PI * 2);
             ctx.fillStyle = fillColor;
             ctx.fill();
-            ctx.lineWidth = isSelected ? 4 : 2;
-            ctx.strokeStyle = isSelected ? colors.selection : colors.nodeStroke;
+            ctx.lineWidth = isActiveSearch || isSelected ? 4 : 2;
+            ctx.strokeStyle = isActiveSearch
+                ? colors.searchActiveStroke
+                : isSelected
+                    ? colors.selection
+                    : isFrontier || isLayered
+                        ? colors.searchFrontierStroke
+                        : colors.nodeStroke;
             ctx.stroke();
 
             ctx.fillStyle = colors.nodeLabel;
@@ -1214,6 +1700,42 @@ class MatchingPage {
         }
     }
 
+    drawSearchOverlay(width, height) {
+        const shouldShowOverlay = this.isAnimating
+            || this.traceMessages.length > 0
+            || this.animationState.message !== this.getDefaultTraceMessage();
+
+        if (!shouldShowOverlay) return;
+
+        const ctx = this.ctx;
+        const colors = this.getThemeColors();
+        const panelWidth = Math.min(width - 36, 420);
+        const panelHeight = 64;
+        const x = 18;
+        const y = height - panelHeight - 18;
+
+        ctx.save();
+        ctx.fillStyle = colors.searchOverlayBg;
+        ctx.strokeStyle = colors.searchOverlayBorder;
+        ctx.lineWidth = 1;
+        ctx.beginPath();
+        ctx.roundRect(x, y, panelWidth, panelHeight, 16);
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = colors.searchOverlaySubtle;
+        ctx.font = '700 11px Inter, sans-serif';
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(this.animationState.phaseLabel.toUpperCase(), x + 16, y + 18);
+
+        ctx.fillStyle = colors.searchOverlayText;
+        ctx.font = '600 12px Inter, sans-serif';
+        const text = this.animationState.message || this.getDefaultTraceMessage();
+        ctx.fillText(text.length > 62 ? `${text.slice(0, 59)}...` : text, x + 16, y + 42);
+        ctx.restore();
+    }
+
     getThemeColors() {
         const isDark = document.body.classList.contains('dark-mode');
         return {
@@ -1221,18 +1743,36 @@ class MatchingPage {
             previewEdge: isDark ? 'rgba(148, 163, 184, 0.75)' : 'rgba(107, 139, 158, 0.75)',
             matchedEdge: isDark ? '#fbbf24' : '#8b5e34',
             matchedGlow: isDark ? 'rgba(251, 191, 36, 0.55)' : 'rgba(139, 94, 52, 0.35)',
+            searchEdge: isDark ? '#7dd3fc' : '#2b7aa0',
+            searchGlow: isDark ? 'rgba(125, 211, 252, 0.6)' : 'rgba(43, 122, 160, 0.35)',
+            augmentingEdge: isDark ? '#f97316' : '#c26a26',
+            augmentingGlow: isDark ? 'rgba(249, 115, 22, 0.55)' : 'rgba(194, 106, 38, 0.34)',
             leftNode: isDark ? '#4f8db5' : '#6b8b9e',
             rightNode: isDark ? '#5c9f78' : '#4a7c59',
             matchedNodeHalo: isDark ? 'rgba(251, 191, 36, 0.18)' : 'rgba(196, 163, 90, 0.18)',
+            searchFrontierHalo: isDark ? 'rgba(56, 189, 248, 0.18)' : 'rgba(107, 139, 158, 0.14)',
+            searchLayerHalo: isDark ? 'rgba(147, 197, 253, 0.18)' : 'rgba(80, 138, 179, 0.12)',
+            searchActiveHalo: isDark ? 'rgba(249, 115, 22, 0.18)' : 'rgba(194, 106, 38, 0.14)',
+            searchActiveStroke: isDark ? '#fdba74' : '#b46123',
+            searchFrontierStroke: isDark ? '#7dd3fc' : '#4f8db5',
             nodeStroke: isDark ? '#f8fafc' : '#ffffff',
             nodeLabel: '#ffffff',
-            selection: isDark ? '#fde68a' : '#f4d03f'
+            selection: isDark ? '#fde68a' : '#f4d03f',
+            searchOverlayBg: isDark ? 'rgba(15, 23, 42, 0.88)' : 'rgba(255, 255, 255, 0.9)',
+            searchOverlayBorder: isDark ? 'rgba(148, 163, 184, 0.24)' : 'rgba(139, 115, 85, 0.18)',
+            searchOverlayText: isDark ? '#e2e8f0' : '#2d2a26',
+            searchOverlaySubtle: isDark ? '#fde68a' : '#8b5e34'
         };
     }
 
     isNodeMatched(nodeId) {
-        if (!this.latestMatching) return false;
-        return this.latestMatching.pairs.some((pair) => pair.left === nodeId || pair.right === nodeId);
+        return this.edges.some((edge) => {
+            if (edge.from !== nodeId && edge.to !== nodeId) {
+                return false;
+            }
+
+            return this.matchedEdgeKeys.has(normalizeUndirectedEdgeKey(edge.from, edge.to));
+        });
     }
 
     getCanvasPoint(event) {

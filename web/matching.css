@@ -43,6 +43,76 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.matching-trace-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.matching-trace-status {
+    padding: 14px;
+    border-radius: 14px;
+    border: 1px solid rgba(107, 139, 158, 0.18);
+    background: linear-gradient(135deg, rgba(107, 139, 158, 0.10), rgba(255, 255, 255, 0.92));
+}
+
+.matching-trace-meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.matching-trace-badge,
+.matching-trace-step {
+    display: inline-flex;
+    align-items: center;
+    min-height: 28px;
+    padding: 0 12px;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    letter-spacing: 0.04em;
+}
+
+.matching-trace-badge {
+    background: rgba(107, 139, 158, 0.14);
+    color: #35556a;
+    text-transform: uppercase;
+}
+
+.matching-trace-step {
+    background: rgba(196, 163, 90, 0.14);
+    color: #805f24;
+}
+
+.matching-trace-message {
+    margin-top: 10px;
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    line-height: 1.5;
+}
+
+.matching-trace-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.matching-trace-item {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 1px solid rgba(139, 115, 85, 0.14);
+    background: linear-gradient(180deg, white 0%, var(--bg-secondary) 100%);
+    color: var(--text-secondary);
+    font-size: 0.77rem;
+    line-height: 1.45;
+}
+
+.matching-trace-item.is-muted {
+    color: var(--text-muted);
+}
+
 .matching-result-list {
     display: flex;
     flex-direction: column;
@@ -93,6 +163,10 @@
     cursor: crosshair;
 }
 
+.matching-canvas-container.is-animating {
+    box-shadow: inset 0 0 0 1px rgba(139, 115, 85, 0.12);
+}
+
 .btn-accent {
     background: linear-gradient(135deg, var(--accent), var(--accent-hover));
     color: white;
@@ -108,6 +182,15 @@
     width: 100%;
 }
 
+.matching-app button:disabled,
+.matching-app input:disabled,
+.matching-app select:disabled {
+    cursor: not-allowed;
+    opacity: 0.6;
+    transform: none !important;
+    box-shadow: none !important;
+}
+
 body.dark-mode .matching-canvas-container {
     background:
         linear-gradient(90deg, rgba(88, 148, 196, 0.12) 0%, rgba(88, 148, 196, 0.12) 49.6%, rgba(216, 177, 101, 0.12) 49.6%, rgba(216, 177, 101, 0.12) 100%),
@@ -119,4 +202,20 @@ body.dark-mode .matching-canvas-container {
 body.dark-mode .matching-result-item {
     background: linear-gradient(180deg, #1f2937 0%, #17202c 100%);
     border-color: var(--border);
+}
+
+body.dark-mode .matching-trace-status,
+body.dark-mode .matching-trace-item {
+    background: linear-gradient(180deg, #1f2937 0%, #17202c 100%);
+    border-color: var(--border);
+}
+
+body.dark-mode .matching-trace-badge {
+    background: rgba(96, 165, 250, 0.18);
+    color: #dbeafe;
+}
+
+body.dark-mode .matching-trace-step {
+    background: rgba(251, 191, 36, 0.16);
+    color: #fde68a;
 }
