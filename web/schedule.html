@@ -101,6 +101,7 @@
                         <option value="semester-dasar">Semester Dasar</option>
                         <option value="padat-3-slot">Padat 3 Slot</option>
                         <option value="slot-kurang">Slot Kurang</option>
+                        <option value="senin-jumat-padat">Padat Senin-Jumat</option>
                     </select>
                     <button id="loadSchedulePreset" class="action-btn preset-load-btn" type="button">
                         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -221,11 +222,34 @@
                 <section class="schedule-surface schedule-board-card">
                     <div class="schedule-section-head">
                         <div>
-                            <h2>Papan Jadwal</h2>
+                            <h2>Graf Konflik Penjadwalan</h2>
                             <p id="statusBanner" class="schedule-status-banner">Masukkan mata kuliah, konflik, dan slot lalu jalankan penjadwalan.</p>
+                            <div class="schedule-search-shell">
+                                <div class="schedule-search-status">
+                                    <span id="scheduleSearchPhase" class="schedule-search-badge">Siap</span>
+                                    <span id="scheduleSearchStep" class="schedule-search-step">0 langkah</span>
+                                </div>
+                                <p id="scheduleSearchMessage" class="schedule-search-message">Setiap mata kuliah adalah simpul, setiap konflik adalah sisi, dan warna simpul menunjukkan slot hasil pewarnaan DSATUR.</p>
+                                <div id="scheduleSearchLog" class="schedule-search-log">
+                                    <div class="schedule-search-log-item is-muted">Belum ada pencarian yang divisualisasikan.</div>
+                                </div>
+                            </div>
                         </div>
                     </div>
+                    <div id="scheduleGraphLegend" class="schedule-graph-legend">
+                        <div class="schedule-graph-legend-item is-muted">Legenda slot akan muncul setelah graf dibangun.</div>
+                    </div>
                     <div id="scheduleBoard" class="schedule-board"></div>
+                </section>
+
+                <section class="schedule-surface schedule-agenda-card">
+                    <div class="schedule-section-head">
+                        <div>
+                            <h2>Agenda Per Hari</h2>
+                            <p>Ringkasan jadwal hasil pewarnaan, dikelompokkan berdasarkan hari/slot.</p>
+                        </div>
+                    </div>
+                    <div id="scheduleAgendaBoard" class="schedule-agenda-board"></div>
                 </section>
 
                 <div class="schedule-lower-grid">
